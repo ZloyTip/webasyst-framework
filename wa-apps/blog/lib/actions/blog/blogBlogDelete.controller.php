@@ -1,6 +1,6 @@
 <?php
 /**
- * @author WebAsyst Team
+ * @author Webasyst
  *
  */
 class blogBlogDeleteController extends waController
@@ -22,7 +22,7 @@ class blogBlogDeleteController extends waController
             }
             $blog_model = new blogBlogModel();
             $blog_model->deleteById($blog_id);
-            $this->log('blog_delete');
+            $this->logAction('blog_delete');
             $this->redirect(wa()->getAppUrl());
         } else {
             $this->redirect(wa()->getAppUrl());

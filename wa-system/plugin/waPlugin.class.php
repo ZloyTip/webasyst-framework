@@ -88,7 +88,7 @@ class waPlugin
             foreach ($files as $t => $file) {
                 try {
                     if (!$ignore_all) {
-                        include($file);
+                        $this->includeUpdate($file);
                         waFiles::delete($cache_database_dir);
                         $app_settings_model->set(array($this->app_id, $this->id), 'update_time', $t);
                     }
@@ -113,6 +113,14 @@ class waPlugin
         }
     }
 
+    /**
+     * @param string $file
+     */
+    private function includeUpdate($file)
+    {
+        include($file);
+    }
+
     protected function install()
     {
 
@@ -121,12 +129,6 @@ class waPlugin
             $schema = include($file_db);
             $model = new waModel();
             $model->createSchema($schema);
-        } else {
-            // check plugin.sql
-            $file_sql = $this->path.'/lib/config/plugin.sql';
-            if (file_exists($file_sql)) {
-                waAppConfig::executeSQL($file_sql, 1);
-            }
         }
         // check install.php
         $file = $this->path.'/lib/config/install.php';
@@ -162,18 +164,10 @@ class waPlugin
                 $sql = "DROP TABLE IF EXISTS ".$table;
                 $model->exec($sql);
             }
-        } else {
-            // check plugin.sql
-            $file_sql = $this->path.'/lib/config/plugin.sql';
-            if (file_exists($file_sql)) {
-                waAppConfig::executeSQL($file_sql, 2);
-            }
-        }
+        } 
         // Remove plugin settings
         $app_settings_model = new waAppSettingsModel();
-        $sql = "DELETE FROM ".$app_settings_model->getTableName()."
-                WHERE app_id = s:app_id";
-        $app_settings_model->exec($sql, array('app_id' => $this->app_id.".".$this->id));
+        $app_settings_model->del($this->app_id.".".$this->id);
 
         if (!empty($this->info['rights'])) {
             // Remove rights to plugin
@@ -235,7 +229,7 @@ class waPlugin
         if (file_exists($file)) {
             return include($file);
         } else {
-            return array();
+            return;
         }
     }
 }

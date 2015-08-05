@@ -27,10 +27,11 @@ class waFiles
     }
 
     /**
-     * Create parent directories for given file path, unless already exist.
+     * Creates a new file or directory.
      *
-     * @param string $path full path
-     * @return string|bool copy of $path if success or false otherwise
+     * @param string $path Path for the new file or directory
+     * @param bool $is_dir Flag requiring to create a directory rather than a file. By default (false), a file is created.
+     * @return string|bool Specified $path value on success, or false on failure
      */
     public static function create($path, $is_dir = false)
     {
@@ -54,10 +55,14 @@ class waFiles
     }
 
     /**
-     * Copy a file, creating parent directories if needed.
-     * @param string $source_path full path to source file
-     * @param string $target_path full path to destination file
-     * @param string|array $skip_pattern pattern to skip files
+     * Copies a file or directory contents.
+     *
+     * @param string $source_path Path to the original file or directory. If path to a directory is specified, then the
+     *     contents of that directory are copied to the specified location. Subdirectories are copied recursively.
+     * @param string $target_path Path for saving a copy.
+     * @param string|array $skip_pattern Regular expression string describing the format of file and subdirectory names
+     *     which must not be copied if a path to a subdirectory is specified in $source_path parameter (otherwise this
+     *     regular expression is ignored).
      * @throws Exception
      */
     public static function copy($source_path, $target_path, $skip_pattern = null)
@@ -96,24 +101,26 @@ class waFiles
                 throw $e;
             }
         } else {
-            self::create(dirname($target_path));
+            self::create(dirname($target_path).'/');
             if (@copy($source_path, $target_path)) {
                 /*@todo copy file permissions*/
             } else {
                 if (file_exists($source_path) && file_exists($target_path) && (filesize($source_path) === 0)) {
                     /*It's ok - it's windows*/
                 } else {
-                    throw new Exception("error on copy from {$source_path} to {$target_path}");
+                    throw new Exception(sprintf(_ws("Error copying file from %s to %s"), $source_path, $target_path));
                 }
             }
         }
     }
 
     /**
-     * Move (rename) a file, creating parent directories if needed.
-     * @param string $source_path full path to source file
-     * @param string $target_path full path to destination file
-     * @return bool
+     * Moves a file or a directory to specified parent directory.
+     * Can be used for renaming.
+     *
+     * @param string $source_path Path to original file or directory
+     * @param string $target_path Path to which the specified file or directory must be copied
+     * @return bool Whether moved (renamed) successfully
      */
     public static function move($source_path, $target_path)
     {
@@ -122,24 +129,33 @@ class waFiles
     }
 
     /**
-     * Create file if not exists or empty if exists and write content into the file.
-     * @param string $path full path to file
-     * @param string $content data to write
+     * Writes data to specified file. If file does not exist, it will be created.
+     *
+     * @param string $path Path for saving a file. An existing file will be overwritten.
+     * @param string $content Data to be written to the file.
+     * @return int|false
      */
     public static function write($path, $content)
     {
         self::create(dirname($path));
-        $h = fopen($path, "w+");
+        $h = @fopen($path, "w+");
         if ($h) {
-            fwrite($h, $content);
+            $length = fwrite($h, $content);
             fclose($h);
+        } else {
+            $length = false;
         }
+        return $length;
     }
 
     /**
-     * @param string $dir
-     * @param bool $recursive
-     * @return array list of all files in given directory
+     * Returns array of files and subdirectories in specified directory.
+     *
+     * @param string $dir Path to directory
+     * @param bool $recursive Flag requiring to return the contents of subdirectories. By default (false)
+     *     subdirectories' contents are not returned. When true, only the list of files contained in specified parent
+     *     directory is returned, without the names of subdirectories.
+     * @return array
      */
     public static function listdir($dir, $recursive = false)
     {
@@ -170,13 +186,14 @@ class waFiles
     }
 
     /**
-     * Delete file or recursively delete a directory.
+     * Deletes a file or a directory. A directory containing subdirectories is deleted recursively.
      *
-     * @param string $path full path to file
-     * @param boolean $ignore_dir_errors true to silently skip errors when deleting directories supposed to be empty (defaults to false)
+     * @param string $path Path to a file or directory.
+     * @param boolean $ignore_dir_errors Flag requiring to ignore any errors which may occur during the deletion of
+     *     directories. By default (false), errors are not ignored — an exception is thrown.
      * @throws waException
      * @throws Exception
-     * @return bool
+     * @return bool True, if deleted successfully
      */
     public static function delete($path, $ignore_dir_errors = false)
     {
@@ -217,6 +234,12 @@ class waFiles
         }
     }
 
+    /**
+     * Returns file name extension.
+     *
+     * @param string $file Path to file or directory
+     * @return string
+     */
     public static function extension($file)
     {
         if (($i = strrpos($file, '.')) !== false) {
@@ -226,8 +249,9 @@ class waFiles
     }
 
     /**
-     * Determine MIME type by filename (using extension)
-     * @param string $filename
+     * Determines the MIME type of a file by its name extension.
+     *
+     * @param string $filename File name
      * @return string
      */
     public static function getMimeType($filename)
@@ -235,64 +259,119 @@ class waFiles
         $type = self::extension($filename);
 
         switch ($type) {
-            case 'jpg': case 'jpeg': case 'jpe': return 'image/jpeg';
-            case 'png': case 'gif': case 'bmp': case 'tiff': return 'image/'.strtolower($type);
-            case 'ico': return 'image/x-icon';
-            case 'doc': case 'docx': return 'application/msword';
-            case 'xls': case 'xlt': case 'xlm': case 'xld': case 'xla': case 'xlc': case 'xlw': case 'xll': return 'application/vnd.ms-excel';
-            case 'ppt': case 'pps': return 'application/vnd.ms-powerpoint';
-            case 'rtf': return 'application/rtf';
-            case 'txt': return 'text/plain';
-            case 'csv': return 'text/csv;  charset=utf-8';
-            case 'pdf': return 'application/pdf';
-            case 'html': case 'htm': case 'php': return 'text/html';
-            case 'js': return 'application/x-javascript';
-            case 'json': return 'application/json';
-            case 'css': return 'text/css';
-            case 'dtd': return 'application/xml-dtd';
-            case 'xml': return 'application/xml';
-            case 'mpeg': case 'mpg': case 'mpe': return 'video/mpeg';
-            case 'mp3': return 'audio/mpeg3';
-            case 'wav': return 'audio/wav';
-            case 'aiff': case 'aif': return 'audio/aiff';
-            case 'avi': return 'video/msvideo';
-            case 'wmv': return 'video/x-ms-wmv';
-            case 'mov': return 'video/quicktime';
-            case 'zip': return 'application/zip';
-            case 'tar': return 'application/x-tar';
-            case 'swf': return 'application/x-shockwave-flash';
-            case 'eml': return 'message/rfc822';
+            case 'jpg':
+            case 'jpeg':
+            case 'jpe':
+                return 'image/jpeg';
+            case 'png':
+            case 'gif':
+            case 'bmp':
+            case 'tiff':
+                return 'image/'.strtolower($type);
+            case 'ico':
+                return 'image/x-icon';
+            case 'doc':
+            case 'docx':
+                return 'application/msword';
+            case 'xls':
+            case 'xlt':
+            case 'xlm':
+            case 'xld':
+            case 'xla':
+            case 'xlc':
+            case 'xlw':
+            case 'xll':
+                return 'application/vnd.ms-excel';
+            case 'ppt':
+            case 'pps':
+                return 'application/vnd.ms-powerpoint';
+            case 'rtf':
+                return 'application/rtf';
+            case 'txt':
+                return 'text/plain';
+            case 'csv':
+                return 'text/csv;  charset=utf-8';
+            case 'pdf':
+                return 'application/pdf';
+            case 'html':
+            case 'htm':
+            case 'php':
+                return 'text/html';
+            case 'js':
+                return 'application/x-javascript';
+            case 'json':
+                return 'application/json';
+            case 'css':
+                return 'text/css';
+            case 'dtd':
+                return 'application/xml-dtd';
+            case 'xml':
+                return 'application/xml';
+            case 'mpeg':
+            case 'mpg':
+            case 'mpe':
+                return 'video/mpeg';
+            case 'mp3':
+                return 'audio/mpeg3';
+            case 'wav':
+                return 'audio/wav';
+            case 'aiff':
+            case 'aif':
+                return 'audio/aiff';
+            case 'avi':
+                return 'video/msvideo';
+            case 'wmv':
+                return 'video/x-ms-wmv';
+            case 'mov':
+                return 'video/quicktime';
+            case 'zip':
+                return 'application/zip';
+            case 'tar':
+                return 'application/x-tar';
+            case 'swf':
+                return 'application/x-shockwave-flash';
+            case 'eml':
+                return 'message/rfc822';
 
-            default: return 'application/octet-stream';
+            default:
+                return 'application/octet-stream';
         }
     }
 
     /**
      *
-     * Change file encoding
+     * Changes text file character encoding.
      *
-     * @param string $file file path
-     * @param string $from original file encoding
-     * @param string $to target file encoding
+     * @param string $file Path to file
+     * @param string $from Original encoding
+     * @param string $to Target encoding
+     * @param string $target Optional path to save encoded file to
      * @throws waException
-     * @return string converted file path
+     * @return string Path to file containing converted text
      */
-    public static function convert($file, $from, $to = 'UTF-8')
+    public static function convert($file, $from, $to = 'UTF-8', $target = null)
     {
         if ($src = fopen($file, 'rb')) {
             $filter = sprintf('convert.iconv.%s/%s//IGNORE', $from, $to);
             if (!@stream_filter_prepend($src, $filter)) {
                 throw new waException("error while register file filter");
             }
-            $file = preg_replace('/(\.[^\.]+)$/', '.'.$to.'$1', $file);
-            if ($src && ($dst = fopen($file, 'wb'))) {
+            if ($target === null) {
+                $extension = pathinfo($file, PATHINFO_EXTENSION);
+                if ($extension) {
+                    $extension = '.'.$extension;
+                }
+                $target = preg_replace('@\.[^\.]+$@', '', $file).'_'.$to.$extension;
+            }
+            if ($dst = fopen($target, 'wb')) {
                 stream_copy_to_stream($src, $dst);
                 fclose($src);
                 fclose($dst);
             } else {
+                fclose($src);
                 throw new waException("Error while convert file encoding");
             }
-            return $file;
+            return $target;
         } else {
             return false;
         }
@@ -318,7 +397,6 @@ class waFiles
                 CURLOPT_CONNECTTIMEOUT    => 10,
                 CURLE_OPERATION_TIMEOUTED => 10,
                 CURLOPT_DNS_CACHE_TIMEOUT => 3600,
-
                 CURLOPT_BINARYTRANSFER    => true,
                 CURLOPT_WRITEFUNCTION     => array(__CLASS__, 'curlWriteHandler'),
             );
@@ -338,7 +416,11 @@ class waFiles
 
             if (!empty($options['host'])) {
                 $curl_options[CURLOPT_HTTPPROXYTUNNEL] = true;
-                $curl_options[CURLOPT_PROXY] = sprintf("%s%s", $options['host'], !empty($options['port']) ? ':'.$options['port'] : '');
+                $curl_options[CURLOPT_PROXY] = sprintf(
+                    "%s%s",
+                    $options['host'],
+                    !empty($options['port']) ? ':'.$options['port'] : ''
+                );
 
                 if (!empty($options['user'])) {
                     $curl_options[CURLOPT_PROXYUSERPWD] = sprintf("%s:%s", $options['user'], $options['password']);
@@ -371,22 +453,58 @@ class waFiles
         return $size;
     }
 
+    /**
+     * Uploads a file from specified URL to a server directory.
+     *
+     * @param string $url URL from which a file must be retrieved
+     * @param string $path Path for saving the downloaded file
+     * @return int
+     * @throws Exception
+     * @throws waException
+     */
     public static function upload($url, $path)
     {
         $s = parse_url($url, PHP_URL_SCHEME);
         $w = stream_get_wrappers();
         if (in_array($s, $w) && ini_get('allow_url_fopen')) {
             if ($fp = @fopen($url, 'rb')) {
-                if (self::$fp = @fopen($path, 'wb')) {
-                    self::$size = stream_copy_to_stream($fp, self::$fp);
-                    fclose(self::$fp);
-                } else {
+                try {
+                    if (self::$fp = @fopen($path, 'wb')) {
+                        self::$size = stream_copy_to_stream($fp, self::$fp);
+                        fclose(self::$fp);
+                        $stream_meta_data = stream_get_meta_data($fp);
+
+                        $headers = array();
+                        if (isset($stream_meta_data["wrapper_data"]["headers"])) {
+                            $headers = $stream_meta_data["wrapper_data"]["headers"];
+                        } elseif (isset($stream_meta_data["wrapper_data"])) {
+                            $headers = $stream_meta_data["wrapper_data"];
+                        }
+
+                        $header_matches = null;
+                        //check server response codes (500/404/403/302/301/etc)
+                        foreach ($headers as $header) {
+                            if (preg_match('@http/\d+\.\d+\s+(\d+)\s+(.+)$@i', $header, $header_matches)) {
+                                $response_code = intval($header_matches[1]);
+                                $status_description = trim($header_matches[2]);
+                                if ($response_code != 200) {
+                                    throw new waException("Invalid server response with code {$response_code} ($status_description) while request {$url}");
+                                }
+                                break;
+                            }
+                        }
+
+                    } else {
+                        throw new waException('Error while open target file');
+                    }
+                } catch (waException $ex) {
                     fclose($fp);
-                    throw new waException('Error while open target file');
+                    waFiles::delete($path);
+                    throw $ex;
                 }
                 fclose($fp);
             } else {
-                throw new waException('Error while open source file');
+                throw new waException("Error while open source file {$url}");
             }
         } elseif ($ch = self::curlInit($url)) {
             if (self::$fp = @fopen($path, 'wb')) {
@@ -402,6 +520,7 @@ class waFiles
                 $response_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 if ($response_code != 200) {
                     curl_close($ch);
+                    waFiles::delete($path);
                     throw new waException("Invalid server response with code {$response_code} while request {$url}");
                 }
             }
@@ -413,13 +532,14 @@ class waFiles
     }
 
     /**
-     * Send file to browser, including appropriate headers.
+     * Reads file contents and outputs it to browser with appropriate headers.
      *
-     * @param string $file - full path to file
-     * @param string|boolean $attach - filename to save file with; null to perform default browser action; defaults to null
-     * @param boolean $exit - whether to call exit after file has been sent; defaults to true
-     * @param boolean $md5 - whether to send Content-MD5 header; defaults to false
-     * @throws waException - if file does not exist
+     * @param string $file File to path
+     * @param string|null $attach Name, which will be suggested to user when he requests to download the file.
+     *     If not specified, browser's auto-suggestion will be used.
+     * @param bool $exit Flag requiring to send file transfer headers to user's browser. By default (true) headers are sent.
+     * @param bool $md5 Flag requiring to send the Content-MD5 header. By default (false) this header is not sent.
+     * @throws waException If file does not exist
      */
     public static function readFile($file, $attach = null, $exit = true, $md5 = false)
     {
@@ -455,7 +575,10 @@ class waFiles
                             } elseif (preg_match('/^(\d+)-$/', $range, $matches)) {
                                 $intervals[] = array('from' => intval($matches[1]), 'to' => $file_size - 1);
                             } elseif (preg_match('/^-(\d+)$/', $range, $matches)) {
-                                $intervals[] = array('from' => $file_size - intval($matches[1]), 'to' => $file_size - 1);
+                                $intervals[] = array(
+                                    'from' => $file_size - intval($matches[1]),
+                                    'to'   => $file_size - 1
+                                );
                             } else {
                                 throw new waException('Requested range not satisfiable', 416);
                             }
@@ -551,7 +674,10 @@ class waFiles
                 @readfile($file);
             }
             if ($exit) {
-                if ($response) {
+                if (!empty($response)) {
+                    /**
+                     * @var waResponse $response
+                     */
                     $response->sendHeaders();
                 }
                 exit();
@@ -562,9 +688,9 @@ class waFiles
     }
 
     /**
-     * Protect folder by creating htaccess if it not exists
+     * Protect a directory by creating .htaccess with 'Deny from all', if it does not exist.
      *
-     * @param string $path
+     * @param string $path Path to directory
      */
     public static function protect($path)
     {
@@ -572,11 +698,11 @@ class waFiles
     }
 
     /**
+     * Returns formatted file size value.
      *
-     * Format file size into sting
-     * @param int $file_size
-     * @param string $format
-     * @param string|mixed $dimensions
+     * @param int $file_size Numerical file size value.
+     * @param string $format Format string for displaying file size value, which must be acceptable for PHP function sprintf().
+     * @param string|mixed $dimensions String of comma-separated file size measure units.
      * @return string
      */
     public static function formatSize($file_size, $format = '%0.2f', $dimensions = 'Bytes,KBytes,MBytes,GBytes')

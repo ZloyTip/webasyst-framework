@@ -19,18 +19,27 @@ class waContactPhoneField extends waContactStringField
     {
         parent::init();
         $this->options['formats']['js'] = new waContactPhoneJsFormatter();
-        $this->options['formats']['value'] = $this->options['formats']['html'] = new waContactPhoneFormatter();
+        $this->options['formats']['value'] = new waContactPhoneFormatter();
+        $this->options['formats']['html'] = new waContactPhoneTopFormatter();
+        $this->options['formats']['top'] = new waContactPhoneTopFormatter();
     }
 
     protected function setValue($value)
     {
-        if (is_array($value) && isset($value['value'])) {
-            $value = $value['value'];
+        if (is_array($value) && array_key_exists('value', $value)) {
+            $v = $value['value'];
+        } else {
+            $v = $value;
         }
-        $value = trim((string)$value);
-        if ($value) {
-            $value = str_replace(str_split('+-()'), '', $value);
-            $value = preg_replace('/(\d)\s+(\d)/i', '$1$2', $value);
+        $v = trim((string)$v);
+        if ($v) {
+            $v = str_replace(str_split('+-()'), '', $v);
+            $v = preg_replace('/(\d)\s+(\d)/i', '$1$2', $v);
+        }
+        if (is_array($value) && isset($value['value'])) {
+            $value['value'] = $v;
+        } else {
+            $value = $v;
         }
         return $value;
     }
@@ -41,6 +50,32 @@ class waContactPhoneField extends waContactStringField
             $params['value'] = $this->format($params['value'], 'value');
         }
         return parent::getHtmlOne($params, $attrs);
+    }
+
+    public function format($data, $format = null)
+    {
+        $data = parent::format($data, $format);
+
+        if ($format && in_array('html', explode(',', $format))) {
+            if ($this->isMulti()) {
+                if (is_array($data)) {
+                    $result = htmlspecialchars($data['value']);
+                    if (isset($data['ext']) && $data['ext']) {
+                        $ext = $data['ext'];
+                        if (isset($this->options['ext'][$ext])) {
+                            $ext = _ws($this->options['ext'][$ext]);
+                        }
+                        $result .= ' <em class="hint">'.htmlspecialchars($ext).'</em>';
+                    }
+                    $data = $result;
+                }
+            } else {
+                if (!is_array($data) || isset($data['value'])) {
+                    $data = htmlspecialchars(is_array($data) ? $data['value'] : $data);
+                }
+            }
+        }
+        return $data;
     }
 }
 
@@ -65,14 +100,15 @@ class waContactPhoneFormatter extends waContactFieldFormatter
 
         $formats_str  = array(
             // 10 digits
-            '0 800 ##-##-##',
+            '0 800 ###-###',
+            wa()->getLocale() == 'ru_RU' ? '(###) ###-##-##' : '(###) ###-####',
             // 11 digits
             '(0##) ####-####',
             '+1 (###) ###-####',
             '+7 (###) ###-##-##',
             '8 800 ###-####',
             // 12 digits
-            '+380 (##) ###-##-##',
+            '+38 (0##) ###-##-##',
             '+375 (##) ###-##-##',
             '+44 ## ####-####',
         );
@@ -94,6 +130,7 @@ class waContactPhoneFormatter extends waContactFieldFormatter
                             $c = $v[0][$i++];
                         }
                     }
+                    unset($c);
                     $v[0] = implode('', $f);
                     return implode(' ', $v);
                 }
@@ -147,10 +184,30 @@ class waContactPhoneJsFormatter extends waContactPhoneFormatter
     {
         if (is_array($data)) {
             $data['value'] = parent::format($data);
+            // No htmlspecialchars, because isn't needed here
+            // This formatted data means to be used in js code,
+            // make escape there by yourself
             return $data;
         } else {
             return parent::format($data);
         }
     }
+}
 
+class waContactPhoneTopFormatter extends waContactPhoneFormatter
+{
+    public function format($data)
+    {
+        $result = '';
+        if (is_array($data)) {
+            $result = parent::format($data);
+            $result = htmlspecialchars($result);
+            if (!empty($data['ext'])) {
+                $result .= " <em class='hint'>" . _ws(htmlspecialchars($data['ext'])) . "</em>";
+            }
+        } else {
+            $result = parent::format($data);
+        }
+        return $result;
+    }
 }

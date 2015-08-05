@@ -1,5 +1,5 @@
 
-<div class="b-comment {if $comment.status == blogCommentModel::STATUS_DELETED}b-deleted{/if}" id="b-comment-{$comment.id}">
+<div class="b-comment {if $comment.status == blogCommentModel::STATUS_DELETED}b-deleted{/if}" id="b-comment-{$comment.id}" data-comment-id="{$comment.id}">
   <span class="b-comment-auth-{$comment.auth_provider|default:blogCommentModel::AUTH_USER}">
     {capture name=commentor_name}
       <i class="icon16{if !$comment.auth_provider || $comment.auth_provider eq blogCommentModel::AUTH_GUEST || $comment.auth_provider eq blogCommentModel::AUTH_USER} userpic20{/if}" style="background-image: url('{$comment.user.photo_url_20}');"></i><span class="bold">{$comment.user.name|escape}</span>
@@ -58,7 +58,11 @@
     <p class="b-comment-text">[`Comment deleted`]</p>
   {else}
     {if isset($comment.post) && (!$comment.post || (!$comment.editable && ($comment.post && $comment.post.status neq blogPostModel::STATUS_PUBLISHED)))}
-      <p class="b-comment-text">[`Comment for unpublished post`]</p>
+        <p class="b-comment-text gray">
+            {$comment.text|escape|nl2br}</span>
+        </p>
+        <p class="b-comment-text hint italic">[`Comment to an unpublished post (not visible anymore)`]</p>
+      
     {else}
       {* COMMENT TEXT *} 
       <p class="b-comment-text">

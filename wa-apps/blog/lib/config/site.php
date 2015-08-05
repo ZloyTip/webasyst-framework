@@ -73,7 +73,7 @@ return array(
             'default' => 'blog_post',
         ),
         'title'         => array(
-            'name'        => _w('Homepage &lt;title&gt;'),
+            'name'        => _w('Homepage <title>'),
             'type'        => 'radio_text',
             'description' => '',
             'items'       => array(
@@ -112,7 +112,7 @@ return array(
     'vars'   => array(
 
         'index.html'  => array(
-            '$content' => 'Core content loaded according to the requested resource: a blog post, post stream, a page, etc.',
+            '$content' => _w('Core content loaded according to the requested resource: a blog post, post stream, a page, etc.'),
         ),
         'stream.html' => array(
             '$posts' => array(
@@ -121,7 +121,7 @@ return array(
                 '$contact_id'      => '',
                 '$title'           => '',
                 '$text'            => '',
-                '$status'          => '0 for published, 1 for deleted',
+                '$status'          => _w('0 for published, 1 for deleted'),
                 '$datetime'        => '',
                 '$datetime_public' => '',
                 '$url'             => '',

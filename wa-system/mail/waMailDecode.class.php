@@ -56,6 +56,30 @@ class waMailDecode
         $this->options = $options + $this->options;
     }
 
+    /** Parse a decoded email header into list of arrays [name => ..., email => ..., full => ...] */
+    public static function parseAddress($header)
+    {
+        $v = $header;
+        try {
+            $parser = new waMailAddressParser($v);
+            $v = $parser->parse();
+        } catch (Exception $e) {
+            if (preg_match('~<([^>]+)>~', $v, $m)) {
+                $email = $m[1];
+            } else if (preg_match('~(\S+\@\S+)~', $v, $m)) {
+                $email = $m[1];
+            } else {
+                $email = explode(' ', $v);
+                $email = $email[0];
+            }
+
+            $name = trim(preg_replace('~<?'.preg_quote($email, '~').'>?~', '', $v));
+            $v = array(array('name' => $name, 'email' => $email));
+        }
+        $v[0]['full'] = $header;
+        return $v;
+    }
+
     public function decode($file, $full_response = false)
     {
         if (is_resource($file)) {
@@ -85,6 +109,7 @@ class waMailDecode
                     $this->read();
                 }
                 $part = $this->parse();
+
                 if ($part && is_array($part)) {
                     $this->decodePart($part);
                 }
@@ -113,19 +138,11 @@ class waMailDecode
                 $v = preg_replace("/[^a-z0-9:,\.\s\t\+-]/i", '', $v);
                 $v = date("Y-m-d H:i:s", strtotime($v));
             } elseif ($h == 'to' || $h == 'cc') {
-                $parser = new waMailAddressParser($v);
-                $v = $parser->parse();
-            } elseif ($h == 'from') {
-                if ($v) {
-                    try {
-                        $parser = new waMailAddressParser($v);
-                        $v = $parser->parse();
-                        if (isset($v[0])) {
-                            $v = $v[0];
-                        }
-                    } catch (Exception $e) {
-                        $v = array('name' => $v, 'email' => '');
-                    }
+                $v = self::parseAddress($v);
+            } elseif ($h == 'from' || $h == 'reply-to') {
+                $v = self::parseAddress($v);
+                if (isset($v[0])) {
+                    $v = $v[0];
                 }
             }
         }
@@ -198,17 +215,20 @@ class waMailDecode
         $html = preg_replace("/href=(['\"]).*?javascript:(.*)?\\1/i", "onclick=' $2 '", $html);
 
         //remove javascript from tags
-        $pattern = "/<(.*)?javascript.*?\(.*?((?>[^()]+)|(?R)).*?\)?\)(.*)?>/i";
-        while (preg_match($pattern, $html)) {
-            $html = preg_replace($pattern, "<$1$3$4$5>", $html);
+        if (preg_match('/javascript/i', $html)) {
+            $pattern = "/<(.*)?javascript.*?\(.*?((?>[^()]+)|(?R)).*?\)?\)(.*)?>/i";
+            while (preg_match($pattern, $html, $m)) {
+                $html = preg_replace($pattern, "<$1$3$4$5>", $html);
+            }
         }
+        if (preg_match('/:expr/i', $html)) {
+            // dump expressions from contibuted content
+            $html = preg_replace("/:expression\(.*?((?>[^(.*?)]+)|(?R)).*?\)\)/i", "", $html);
 
-        // dump expressions from contibuted content
-        $html = preg_replace("/:expression\(.*?((?>[^(.*?)]+)|(?R)).*?\)\)/i", "", $html);
-
-        $pattern = "/<(.*)?:expr.*?\(.*?((?>[^()]+)|(?R)).*?\)?\)(.*)?>/i";
-        while (preg_match($pattern, $html)) {
-            $html = preg_replace($pattern, "<$1$3$4$5>", $html);
+            $pattern = "/<(.*)?:expr.*?\(.*?((?>[^()]+)|(?R)).*?\)?\)(.*)?>/i";
+            while (preg_match($pattern, $html)) {
+                $html = preg_replace($pattern, "<$1$3$4$5>", $html);
+            }
         }
         // remove all on* events
         $pattern = "/<([^>]*)?[\s\r\n\t]on.+?=?\s?.+?(['\"]).*?\\2\s?(.*)?>/i";

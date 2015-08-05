@@ -12,14 +12,23 @@ class waContactModel extends waModel
      */
     public function getName($id)
     {
-        $sql = "SELECT id, name FROM ".$this->table." WHERE id ";
+        $sql = "SELECT * FROM ".$this->table." WHERE id ";
         if (is_array($id)) {
             $id = array_unique($id);
             $sql .= " IN ('".implode("','", $this->escape($id, 'int'))."')";
-            return $this->query($sql)->fetchAll('id', true);
+            $rows = $this->query($sql)->fetchAll();
+            $result = array();
+            foreach ($rows as $row) {
+                $result[$row['id']] = waContactNameField::formatName($row);
+            }
+            return $result;
         } else {
             $sql .= " = i:id";
-            return $this->query($sql, array('id' => $id))->fetchField('name');
+            $row = $this->query($sql, array('id' => $id))->fetch();
+            if ($row) {
+                return waContactNameField::formatName($row);
+            }
+            return '';
         }
     }
 
@@ -112,10 +121,25 @@ class waContactModel extends waModel
         $contact_data_text_model = new waContactDataTextModel();
         $contact_data_text_model->deleteByField('contact_id', $id);
 
+        // Dalete from categories
+        $contact_categories_model = new waContactCategoriesModel();
+        $category_ids = array_keys($contact_categories_model->getByField('contact_id', $id, 'category_id'));
+        $contact_categories_model->deleteByField('contact_id', $id);
 
-        // Delete contact from logs
-        $login_log_model = new waLoginLogModel();
-        $login_log_model->deleteByField('contact_id', $id);
+        // update counters in wa_contact_category
+        $contact_category_model = new waContactCategoryModel();
+        $contact_category_model->recalcCounters($category_ids);
+
+//        // Delete contact from logs
+//        $login_log_model = new waLoginLogModel();
+//        $login_log_model->deleteByField('contact_id', $id);
+
+        // Clear references
+        $this->updateByField(array(
+            'company_contact_id' => $id
+        ), array(
+            'company_contact_id' => 0
+        ));
 
         // Delete contact
         return $this->deleteById($id);

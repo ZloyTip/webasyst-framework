@@ -3,9 +3,8 @@
 return array(
     'name' => 'Webasyst',
     'prefix' => 'webasyst',
-    'icon' => 'img/webasyst.gif',
     'analytics' => true,
-    'version' => '1.2.2',
-    'critical'=>'1.2.0',
+    'version' => '1.4.0',
+    'critical'=>'1.4.0',
     'vendor' => 'webasyst',
 );

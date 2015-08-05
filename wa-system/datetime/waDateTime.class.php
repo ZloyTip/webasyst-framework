@@ -15,6 +15,11 @@
 class waDateTime
 {
 
+    /**
+     * Returns the list of available time zones with localized descriptions.
+     *
+     * @return array
+     */
     public static function getTimeZones()
     {
         $cache_file = wa()->getConfig()->getPath('cache', 'config/timezones'.wa()->getLocale());
@@ -35,7 +40,7 @@ class waDateTime
         }
     }
 
-    protected static function getAllTimeZones()
+    public static function getAllTimeZones()
     {
         $file = dirname(__FILE__)."/data/timezones.php";
         if (file_exists($file)) {
@@ -47,45 +52,49 @@ class waDateTime
         foreach ($data as $time_zone_id) {
             $t = explode('/', $time_zone_id, 2);
             $date_time = new DateTime('now');
-            $date_time->setTimezone(new DateTimeZone($time_zone_id));
+            $tz = new DateTimeZone($time_zone_id);
+            $date_time->setTimezone($tz);
             $offset = (float)$date_time->getOffset()/3600;
+            $group = count($tz->getTransitions(strtotime('-1 year'), time()));
             if (isset($t[1])) {
-                $time_zones[$offset][$t[0]][] = $t[1];
+                $time_zones[$offset][$group][$t[0]][] = $t[1];
             } else {
-                $time_zones[$offset][''][] = $t[0];
+                $time_zones[$offset][$group][''][] = $t[0];
             }
         }
 
         ksort($time_zones);
 
         $result = array();
-        foreach ($time_zones as $offset => $offset_zones) {
-            if ($offset >= 10) {
-                $offset = '+'.$offset;
-            } elseif ($offset >= 0 && $offset < 10) {
-                $offset = '+0'.$offset;
-            } elseif ($offset < 0 && $offset > -10) {
-                $offset = '−0'.abs($offset);
-            } elseif ($offset <= -10) {
-                $offset = '−'.abs($offset);
-            }
-            foreach ($offset_zones as $continent => $zones) {
-                if (count($zones) <= 5) {
-                    $result[($continent ? $continent."/" : '').$zones[0]] = array($offset, $zones);
-                } else {
-                    $i = 0;
-                    $n = count($zones);
-                    while ($i < $n) {
-                        $tmp = array();
-                        for ($j = 0; $j < 5 && $i + $j < $n; $j++) {
-                            $z = $zones[$i + $j];
-                            if (($k = strpos($z, '/')) !== false) {
-                                $z = substr($z, $k + 1);
+        foreach ($time_zones as $offset => $group_offset_zones) {
+            foreach ($group_offset_zones as $group => $offset_zones) {
+                if ($offset >= 10) {
+                    $str_offset = '+' . $offset;
+                } elseif ($offset >= 0 && $offset < 10) {
+                    $str_offset = '+0' . $offset;
+                } elseif ($offset < 0 && $offset > -10) {
+                    $str_offset = '−0' . abs($offset);
+                } elseif ($offset <= -10) {
+                    $str_offset = '−' . abs($offset);
+                }
+                foreach ($offset_zones as $continent => $zones) {
+                    if (count($zones) <= 5) {
+                        $result[($continent ? $continent . "/" : '') . $zones[0]] = array($str_offset, $zones);
+                    } else {
+                        $i = 0;
+                        $n = count($zones);
+                        while ($i < $n) {
+                            $tmp = array();
+                            for ($j = 0; $j < 5 && $i + $j < $n; $j++) {
+                                $z = $zones[$i + $j];
+                                if (($k = strpos($z, '/')) !== false) {
+                                    $z = substr($z, $k + 1);
+                                }
+                                $tmp[] = $z;
                             }
-                            $tmp[] = $z;
+                            $result[$continent . "/" . $zones[$i]] = array($str_offset, $tmp);
+                            $i += 5;
                         }
-                        $result[$continent."/".$zones[$i]] = array($offset, $tmp);
-                        $i += 5;
                     }
                 }
             }
@@ -94,12 +103,26 @@ class waDateTime
         return $result;
     }
 
+    /**
+     * Returns the default time zone.
+     *
+     * @return string
+     */
     public static function getDefaultTimeZone()
     {
         return date_default_timezone_get();
     }
 
-
+    /**
+     * Returns date as string according to specified format.
+     *
+     * @param string $format Date format. Format symbols acceptable for PHP function date are supported. To display
+     *     month name in lowercase, character 'f' should be used.
+     * @param int|string|null $time Unix timestamp. If not specified, current timestamp is used.
+     * @param string|null $timezone Time zone identifier. If not specified, the time zone is determined automatically.
+     * @param string|null $locale Locale identifier. If not specifed, current user's locale is determined automatically.
+     * @return string
+     */
     public static function date($format, $time = null, $timezone = null, $locale = null)
     {
         if (is_numeric($time) && strlen($time)!= 8) {
@@ -120,18 +143,20 @@ class waDateTime
         // hack to insert localized month name
         if (strpos($format, 'F') !== false) {
             $month = $date_time->format('F');
+
+            $old_locale = waLocale::getLocale();
+            if ($locale && $locale != $old_locale) {
+                wa()->setLocale($locale);
+            }
             $local = _ws($month, $month, 2);
             $result = str_replace(
-            array(
-                    "@$month@",
-            $month
-            ),
-            array(
-            mb_strtolower($local),
-            $local
-            ),
-            $result
+                array("@$month@", $month),
+                array(mb_strtolower($local), $local),
+                $result
             );
+            if ($locale && $locale != $old_locale) {
+                wa()->setLocale($old_locale);
+            }
         }
         return $result;
     }
@@ -151,6 +176,27 @@ class waDateTime
         return str_replace(array_keys($replace), array_values($replace), $format);
     }
 
+    /**
+     * Returns time as string according to specified format.
+     *
+     * @see wa_date()
+     *
+     * @param string $format Date/time format. The following format strings are acceptable:
+     *     - 'humandatetime': adds words "yesterday", "today", "tomorrow" instead of appropriate dates relative to the
+     *       current user date
+     *     - 'humandate': returns the date in format 'd f Y' supported by method date (format strings listed below are
+     *       also supported by that method)
+     *     - 'date': returns date/time in format 'Y-m-d'
+     *     - 'time': returns date/time in format 'H:i'
+     *     - 'fulltime': returns date/time in format 'H:i:s'
+     *     - 'datetime': returns date/time in format 'Y-m-d H:i'
+     *     - 'fulldatetime': returns date/time in format 'Y-m-d H:i:s'
+     *     - 'timestamp': returns date/time in format 'U'
+     * @param string|null $time Unix timestamp. If not specified, current timestamp is used.
+     * @param string|null $timezone Time zone identifier. If not specified, the time zone is determined automatically.
+     * @param string|null $locale Locale identifier. If not specifed, current user's locale is determined automatically.
+     * @return string
+     */
     public static function format($format, $time = null, $timezone = null, $locale = null)
     {
         if (!$locale) {
@@ -205,13 +251,25 @@ class waDateTime
         return $result;
     }
 
+    /**
+     * Returns format strings for PHP function date corresponding to formats used by Webasyst framework.
+     *
+     * @param string $format Time format strings used in Webasyst framework including the following options:
+     *     - 'date_formats' sub-array keys specified in locale configuration file located in wa-system/locale/data/,
+     *     - PHP class DateTime constants,
+     *     - format strings acceptable for PHP function date, or one of the identifiers corresponding to pre-defined
+     *       time formatting strings supported by method format().
+     * @see self::format()
+     * @param string|null $locale Locale identifier. If not specifed, current user locale is determined automatically.
+     * @return string
+     */
     public static function getFormat($format, $locale = null)
     {
         if (!$locale) {
             $locale = waSystem::getInstance()->getLocale();
         }
         $locale = waLocale::getInfo($locale);
-        $date_formats = $locale['date_formats'];
+        $date_formats = isset($locale['date_formats']) ? $locale['date_formats'] : array();
 
         $default = array(
             'humandate' => 'd f Y',
@@ -222,9 +280,6 @@ class waDateTime
             'fulldatetime' => 'Y-m-d H:i:s',
             'timestamp' => 'U',
         );
-
-
-
 
         if (isset($date_formats[$format])) {
             return $date_formats[$format];
@@ -240,6 +295,15 @@ class waDateTime
         }
     }
 
+    /**
+     * Returns format strings for date/time formatting by means of JavaScript code corresponding to formats used by
+     * Webasyst framework.
+     *
+     * @param string $format Format string accepted by parameter$format of method getFormat().
+     * @see self::getFormat()
+     * @param string|null $locale Locale identifier. If not specifed, current user's locale is determined automatically.
+     * @see string
+     */
     public static function getFormatJS($format, $locale = null)
     {
         $format = self::getFormat($format, $locale);
@@ -272,6 +336,19 @@ class waDateTime
             return preg_replace($pattern, $replace, $format);
     }
 
+    /**
+     * Returns time value, formatted using one of the formats supported by Webasyst framework, as a string accepted by
+     * standard PHP functions.
+     *
+     * @see wa_parse_date()
+     *
+     * @param string $format Format string accepted by format() method except for 'humandatetime'.
+     * @see self::format()
+     * @param string $string Date/time value string formatted to match the format identifier specified in $format parameter.
+     * @param string|null $timezone Time zone identifier. If not specified, current time zone is determined automatically.
+     * @param string|null $locale Locale identifier. If not specifed, current user locale is determined automatically.
+     * @return string
+     */
     public static function parse($format, $string, $timezone = null, $locale = null)
     {
         $f = self::getFormat($format, $locale);

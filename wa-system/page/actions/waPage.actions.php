@@ -52,6 +52,16 @@ class waPageActions extends waActions
 
         $data['routes'] = $routes;
 
+        /**
+         * Backend sidebar pages
+         * UI hook allow extends backend settings page
+         * @event backend_page_edit
+         * @param array $page
+         * @return array[string][string]string $return[%plugin_id%] html output
+         */
+        $event_params = array();
+        $data['backend_pages_sidebar'] = wa()->event('backend_pages_sidebar', $event_params);
+
         $template = $this->getConfig()->getRootPath().'/wa-system/page/templates/Page.html';
         $this->display($this->prepareData($data), $template);
     }
@@ -142,6 +152,21 @@ class waPageActions extends waActions
 
         $data['page_edit'] = wa()->event('page_edit', $data);
 
+        /**
+         * Backend settings page
+         * UI hook allow extends backend settings page
+         * @event backend_page_edit
+         * @param array $page
+         * @return array[string][string]string $return[%plugin_id%]['action_button_li'] html output
+         * @return array[string][string]string $return[%plugin_id%]['settings_section'] html output
+         * @return array[string][string]string $return[%plugin_id%]['section'] html output
+         */
+        $data['backend_page_edit'] = wa()->event('backend_page_edit', $page, array(
+            'action_button_li',
+            'section',
+            'settings_section'
+        ));
+
         $template = $this->getConfig()->getRootPath().'/wa-system/page/templates/PageEdit.html';
         $this->display($data, $template);
     }
@@ -226,6 +251,14 @@ class waPageActions extends waActions
             $params = $this->getPageModel()->getParams($id);
         }
 
+        $og_params = array();
+        foreach ($params as $k => $v) {
+            if (substr($k, 0, 3) == 'og_') {
+                $og_params[substr($k, 3)] = $v;
+                unset($params[$k]);
+            }
+        }
+
         $main_params = array();
         foreach ($vars as $v => $t) {
             if (isset($params[$v])) {
@@ -235,10 +268,12 @@ class waPageActions extends waActions
                 $main_params[$v] = '';
             }
         }
+
         return array(
             'vars' => $vars,
             'params' => $main_params,
             'other_params' => $params,
+            'og_params' => $og_params
         );
     }
 
@@ -386,7 +421,12 @@ class waPageActions extends waActions
                 }
             }
         }
-
+        $og = waRequest::post('og');
+        foreach ($og as $k => $v) {
+            if ($v) {
+                $params['og_'.$k] = $v;
+            }
+        }
         $this->getPageModel()->setParams($id, $params);
     }
 
@@ -437,13 +477,13 @@ class waPageActions extends waActions
 
         if (!is_writable($path)) {
             $p = substr($path, strlen(wa()->getDataPath('', true)));
-            $errors = sprintf(_w("File could not bet saved due to the insufficient file write permissions for the %s folder."), $p);
+            $errors = sprintf(_w("File could not be saved due to insufficient write permissions for the %s folder."), $p);
         } else {
             $errors = array();
             $f = waRequest::file('file');
             $name = $f->name;
             if ($this->processFile($f, $path, $name, $errors)) {
-                $response = wa()->getDataUrl('img/'.$name, true);
+                $response = wa()->getDataUrl('img/'.$name, true, null, !!waRequest::get('absolute'));
             }
             $errors = implode(" \r\n", $errors);
         }
@@ -452,7 +492,7 @@ class waPageActions extends waActions
             if ($errors) {
                 echo json_encode(array('error' => $errors));
             } else {
-                echo stripslashes(json_encode(array('filelink' => $response)));
+                echo json_encode(array('filelink' => $response));
             }
         } else {
             $this->displayJson($response, $errors);
@@ -495,18 +535,24 @@ class waPageActions extends waActions
 
     protected function saveFile(waRequestFile $f, $path, &$name)
     {
-        if (file_exists($path.DIRECTORY_SEPARATOR.$f->name)) {
-            $i = strrpos($f->name, '.');
-            $name = substr($f->name, 0, $i);
-            $ext = substr($f->name, $i + 1);
+        $name = $f->name;
+        if (!preg_match('//u', $name)) {
+            $tmp_name = @iconv('windows-1251', 'utf-8//ignore', $name);
+            if ($tmp_name) {
+                $name = $tmp_name;
+            }
+        }
+        if (file_exists($path.DIRECTORY_SEPARATOR.$name)) {
+            $i = strrpos($name, '.');
+            $ext = substr($name, $i + 1);
+            $name = substr($name, 0, $i);
             $i = 1;
             while (file_exists($path.DIRECTORY_SEPARATOR.$name.'-'.$i.'.'.$ext)) {
                 $i++;
             }
             $name = $name.'-'.$i.'.'.$ext;
-            return $f->moveTo($path, $name);
         }
-        return $f->moveTo($path, $f->name);
+        return $f->moveTo($path, $name);
     }
 
     public function helpAction()
@@ -576,6 +622,37 @@ class waPageActions extends waActions
             $app = null;
         }
 
+        if (wa()->appExists('site')) {
+            $model = new waModel();
+            $blocks = $model->query('SELECT * FROM site_block ORDER BY sort')->fetchAll('id');
+
+            $active_app = wa()->getApp();
+            $apps = wa()->getApps();
+            foreach ($apps as $_app_id => $_app) {
+                $path = $this->getConfig()->getAppsPath($_app_id, 'lib/config/site.php');
+                if (file_exists($path)) {
+                    waLocale::load(wa()->getLocale(), $this->getConfig()->getAppsPath($_app_id, 'locale'), $_app_id, true);
+                    $site_config = include($path);
+                    if (!empty($site_config['blocks'])) {
+                        foreach ($site_config['blocks'] as $block_id => $block) {
+                            if (!is_array($block)) {
+                                $block = array('content' => $block, 'description' => '');
+                            }
+                            $block_id = $_app_id.'.'.$block_id;
+                            if (!isset($blocks[$block_id])) {
+                                $block['id'] = $block_id;
+                                $block['app'] = $_app;
+                                $blocks[$block_id] = $block;
+                            }
+                        }
+                    }
+                }
+            }
+            wa()->setActive($active_app);
+        } else {
+            $blocks = array();
+        }
+
         $this->display(array(
             'vars' => $vars,
             'file' => $file,
@@ -598,8 +675,10 @@ class waPageActions extends waActions
                 '{include file="..."}' => _ws('Embeds a Smarty template into the current content. <em>file</em> attribute specifies a template filename within the current design theme folder'),
                 '{if}...{else}...{/if}' => _ws('Similar to PHP if statements'),
                 '{foreach from=$a key=k item=v}...{foreachelse}...{/foreach}' => _ws('{foreach} is for looping over arrays of data'),
-            )
+            ),
+            'blocks' => $blocks
         ), $this->getConfig()->getRootPath().'/wa-system/page/templates/Help.html');
+
     }
 
     /**

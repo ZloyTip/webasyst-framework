@@ -1,6 +1,6 @@
 <?php
 /**
- * @author WebAsyst Team
+ * @author Webasyst
  *
  */
 class blogCommentsAction extends waViewAction
@@ -35,7 +35,7 @@ class blogCommentsAction extends waViewAction
 
         $data = $this->getComments(array(
             'offset' => $offset, 
-            'comments_per_page' => $comments_per_page, 
+            'limit' => $comments_per_page, 
             'blog_id' => $blog_ids,
             'filter' => $filter
         ), $fields, $prepare_options);

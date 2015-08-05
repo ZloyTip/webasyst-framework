@@ -282,10 +282,10 @@ class waContactFields
 
         // Remove field from order lists first
         if (isset(self::$companyFields[$id])) {
-            self::disableField($id, 'company');
+            self::disableField($id, 'company', true);
         }
         if (isset(self::$personFields[$id])) {
-            self::disableField($id, 'person');
+            self::disableField($id, 'person', true);
         }
 
         $file = wa()->getConfig()->getConfigPath('custom_fields.php', true, 'contacts');
@@ -293,7 +293,7 @@ class waContactFields
             return;
         }
         $fields = include($file);
-        if (!$fields) {
+        if (!$fields || !is_array($fields)) {
             return;
         }
         foreach ($fields as $k => $f) {
@@ -311,6 +311,14 @@ class waContactFields
             throw new waException('Unable to find field '.$id.' in '.$file);
         }
         unset($fields[$k]);
+
+        $fields = array_values($fields);
+        foreach ($fields as $field) {
+            if ($field instanceof waContactField) {
+                $field->prepareVarExport();
+            }
+        }
+
         waUtils::varExportToFile(array_values($fields), $file, true);
         unset(self::$fieldStatus[$id], self::$personDisabled[$id], self::$companyDisabled[$id]);
     }
@@ -337,7 +345,8 @@ class waContactFields
         $file = wa()->getConfig()->getConfigPath('custom_fields.php', true, 'contacts');
         if (is_readable($file)) {
             $fields = include($file);
-        } else {
+        }
+        if (empty($fields) || !is_array($fields)) {
             $fields = array();
         }
         $changed = false;
@@ -351,6 +360,11 @@ class waContactFields
         }
         if (!$changed) {
             $fields[] = $field;
+        }
+        foreach ($fields as $field) {
+            if ($field instanceof waContactField) {
+                $field->prepareVarExport();
+            }
         }
         waUtils::varExportToFile($fields, $file, true);
 
@@ -429,6 +443,9 @@ class waContactFields
         }
 
         $old = include($fileRead);
+        if (empty($old) || !is_array($old)) {
+            $old = array();
+        }
         if ($position !== null) {
             $position = (int) $position;
         }
@@ -457,9 +474,10 @@ class waContactFields
      * Remove given field from person or company order list.
      * @param $type string person|company
      * @param $id waContactField|int field ID or field instance.
+     * @param boolean $delete delete values from db or not
      * @throws waException
      */
-    public static function disableField($id, $type) {
+    public static function disableField($id, $type, $delete = false) {
         self::ensureStaticVars();
         if (is_object($id) && $id instanceof waContactField) {
             $id = $id->getId();
@@ -495,8 +513,10 @@ class waContactFields
          * @var waContactField $f
          */
 
-        // Remove data from DB
-        $f->getStorage()->deleteAll($id, $type);
+        if ($delete) {
+            // Remove data from DB
+            $f->getStorage()->deleteAll($id, $type);
+        }
 
         // Remove field from order file
         if (!is_readable($file)) {
@@ -504,6 +524,9 @@ class waContactFields
         }
         $contactOrder = include($file);
         unset($contactOrder[$id]);
+        if (empty($contactOrder) || !is_array($contactOrder)) {
+            $contactOrder = array();
+        }
         waUtils::varExportToFile($contactOrder, $file, true);
     }
 
@@ -577,7 +600,11 @@ class waContactFields
         // Load custom fields
         $file = wa()->getConfig()->getConfigPath('custom_fields.php', true, 'contacts');
         if (is_readable($file)) {
-            foreach(include($file) as $f) {
+            $cfg = include($file);
+            if (empty($cfg) || !is_array($cfg)) {
+                $cfg = array();
+            }
+            foreach($cfg as $f) {
                 /**
                  * @var waContactField $f
                  */

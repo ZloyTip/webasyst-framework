@@ -2,14 +2,8 @@
 
     <article class="post" role="main" id="post-{$post.id}">
         
-        <div class="breadcrumbs">
-            <a href="{$wa->blog->url()}">[`All posts`]</a>
-            <span class="rarr">→</span>
-        </div>
-        
-        <h1 itemprop="name">
-            {$post.title}
-
+        <h1>
+            <span itemprop="name">{$post.title}</span>
             {* @event prepare_posts_frontend.%plugin_id%.post_title *}
             {if !empty($post.plugins.post_title)}
                 {foreach $post.plugins.post_title as $plugin => $output}{$output}{/foreach}
@@ -46,6 +40,10 @@
             {$post.text}
         </div>
 
+        {if $post.album_id && $post.album.id && $post.album.photos}
+            {include 'post.album.html' album=$post.album inline}
+        {/if}
+        
         {* @event prepare_posts_frontend.%plugin_id%.after *}
         {if !empty($post.plugins.after)}
             <div class="text_after">

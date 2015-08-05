@@ -83,6 +83,15 @@ class waViewHelper
      */
     public function myNav($ul_class = true)
     {
+
+        $domain = wa()->getRouting()->getDomain(null, true);
+        $domain_config_path = wa()->getConfig()->getConfigPath('domains/'.$domain.'.php', true, 'site');
+        if (file_exists($domain_config_path)) {
+            $domain_config = include($domain_config_path);
+        } else {
+            $domain_config = array();
+        }
+
         $routes = wa()->getRouting()->getRoutes();
         $apps = wa()->getApps();
         $result = array();
@@ -90,6 +99,25 @@ class waViewHelper
             if (isset($r['app']) && !empty($apps[$r['app']]['my_account'])) {
                 $result[$r['app']] = $r;
             }
+        }
+
+
+        if (isset($domain_config['personal'])) {
+            $tmp = array();
+            foreach ($domain_config['personal'] as $app_id => $enabled) {
+                if (!isset($result[$app_id])) {
+                    continue;
+                }
+                if ($enabled) {
+                    $tmp[$app_id] = $result[$app_id];
+                } else {
+                    unset($result[$app_id]);
+                }
+            }
+            foreach ($result as $app_id => $r) {
+                $tmp[$app_id]  = $r;
+            }
+            $result = array_reverse($tmp, true);
         }
 
         $old_app = wa()->getApp();
@@ -112,7 +140,7 @@ class waViewHelper
                 try {
                     $action = new $class_name();
                     wa()->getView()->assign('my_nav_selected', $app_id == $old_app ? $my_nav_selected : '');
-                    $result[$app_id] = $action->display();
+                    $result[$app_id] = $action->display(false);
                 } catch (Exception $e) {
                     unset($result[$app_id]);
                 }
@@ -156,25 +184,50 @@ class waViewHelper
         return null;
     }
 
-    public function headJs()
+    public function head()
     {
         $domain = wa()->getRouting()->getDomain(null, true);
         $domain_config_path = $this->getConfig()->getConfigPath('domains/'.$domain.'.php', true, 'site');
+        $html = '';
+        $og = wa()->getResponse()->getMeta('og');
+        if ($og) {
+            foreach ($og as $k => $v) {
+                $html .= '<meta property="og:'.htmlspecialchars($k).'" content="'.htmlspecialchars($v).'" />'.PHP_EOL;
+            }
+        }
+
         if (file_exists($domain_config_path)) {
             /**
              * @var $domain_config array
              */
             $domain_config = include($domain_config_path);
-            $html = '';
             if (!empty($domain_config['head_js'])) {
                 $html .= $domain_config['head_js'];
             }
             $response = wa()->getResponse();
-            if (!empty($domain_config['google_analytics'])) {
-                $html .= <<<HTML
+            if (isset($domain_config['google_analytics']) && !is_array($domain_config['google_analytics'])) {
+                $domain_config['google_analytics'] = array(
+                    'code' => $domain_config['google_analytics']
+                );
+            }
+            if (!empty($domain_config['google_analytics']['code'])) {
+                if (!empty($domain_config['google_analytics']['universal'])) {
+                    $html .= <<<HTML
+<script type="text/javascript">
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', '{$domain_config['google_analytics']['code']}', 'auto');
+ga('send', 'pageview');
+{$response->getGoogleAnalytics()}
+</script>
+HTML;
+                } else {
+                    $html .= <<<HTML
 <script type="text/javascript">
   var _gaq = _gaq || [];
-  _gaq.push(['_setAccount', '{$domain_config['google_analytics']}']);
+  _gaq.push(['_setAccount', '{$domain_config['google_analytics']['code']}']);
   _gaq.push(['_trackPageview']);
  {$response->getGoogleAnalytics()}
   (function() {
@@ -184,10 +237,15 @@ class waViewHelper
   })();
 </script>
 HTML;
+                }
             }
-            return $html;
         }
-        return '';
+        return $html;
+    }
+
+    public function headJs()
+    {
+        return $this->head();
     }
 
 
@@ -260,11 +318,15 @@ HTML;
     public function css()
     {
         if (wa()->getEnv() == 'backend') {
-            $css = '<link href="'.wa()->getRootUrl().'wa-content/css/wa/wa-1.0.css?v'.$this->version(true).'" rel="stylesheet" type="text/css" >
+            $css = '<link href="'.wa()->getRootUrl().'wa-content/css/wa/wa-1.3.css?v'.$this->version(true).'" rel="stylesheet" type="text/css" >
 <!--[if IE 9]><link type="text/css" href="'.wa()->getRootUrl().'wa-content/css/wa/wa-1.0.ie9.css" rel="stylesheet"><![endif]-->
 <!--[if IE 8]><link type="text/css" href="'.wa()->getRootUrl().'wa-content/css/wa/wa-1.0.ie8.css" rel="stylesheet"><![endif]-->
 <!--[if IE 7]><link type="text/css" href="'.wa()->getRootUrl().'wa-content/css/wa/wa-1.0.ie7.css" rel="stylesheet"><![endif]-->
 <link type="text/css" rel="stylesheet" href="'.wa()->getRootUrl().'wa-content/font/ruble/arial/fontface.css">'."\n";
+            
+            if ( !waRequest::isMobile(false) )
+                $css .= '<meta name="viewport" content="width=device-width, initial-scale=1" />'."\n"; //for handling iPad and tablet computer default view properly
+            
         } else {
             $css = '';
         }
@@ -291,7 +353,7 @@ HTML;
                 $this->version = isset($app_info['version']) ? $app_info['version'] : '0.0.1';
                 if (SystemConfig::isDebug()) {
                     $this->version .= ".".time();
-                } elseif (!$app_id) {
+                } else {
                     $file = wa()->getAppPath('lib/config/build.php', $app_id);
                     if (file_exists($file)) {
                         $build = include($file);
@@ -529,10 +591,16 @@ HTML;
     }
 
 
+    /**
+     * @param string $to
+     * @param array $errors
+     * @return bool
+     */
     public function sendEmail($to, &$errors)
     {
         if (!$to) {
-            $to = waMail::getDefaultFrom();
+            $app_settings_model = new waAppSettingsModel();
+            $to = $app_settings_model->get('webasyst', 'email');
         }
         if (!$to) {
             $errors['all'] = _ws('Recipient (administrator) email is not valid');
@@ -587,10 +655,10 @@ HTML;
         return $this->url().$this->app().'/captcha.php'.($add_random ? '?v='.uniqid(time()) : '');
     }
 
-    public function signupUrl()
+    public function signupUrl($absolute = false)
     {
         $auth = wa()->getAuthConfig();
-        return wa()->getRouteUrl((isset($auth['app']) ? $auth['app'] : '').'/signup');
+        return wa()->getRouteUrl((isset($auth['app']) ? $auth['app'] : '').'/signup', array(), $absolute);
     }
 
     public function loginUrl($absolute = false)
@@ -612,7 +680,7 @@ HTML;
      * 2 - with <form action="LOGIN_URL">
      * @return string
      */
-    public function loginForm($error = '', $form = 1)
+    public function loginForm($error = '', $form = 1, $placeholders = false)
     {
         $auth = wa($this->app_id)->getAuth();
         $field_id = $auth->getOption('login');
@@ -626,22 +694,32 @@ HTML;
                 $field_name = ucfirst($field_id);
             }
         }
-        return '<div class="wa-form">'.
+        $html = '<div class="wa-form">'.
             ($form ? '<form action="'.($form === 2 ? $this->loginUrl() : '').'" method="post">' : '').'
                 <div class="wa-field wa-field-'.$field_id.'">
                     <div class="wa-name">'.$field_name.'</div>
                     <div class="wa-value">
-                        <input'.($error ? ' class="wa-error"' : '').' type="text" name="login" value="'.htmlspecialchars(waRequest::post('login')).'">
+                        <input'.($error ? ' class="wa-error"' : '').' type="text" name="login" value="'.htmlspecialchars(waRequest::post('login')).'"'.($placeholders ? ' placeholder="'.$field_name.'"' : '').'>
                     </div>
                 </div>
                 <div class="wa-field wa-field-password">
                     <div class="wa-name">'._ws('Password').'</div>
                     <div class="wa-value">
-                        <input'.($error ? ' class="wa-error"' : '').' type="password" name="password">
-                        '.($error ? '<em class="wa-error-msg">'.$error.'</em>' : '').'
+                        <input'.($error ? ' class="wa-error"' : '').' type="password" name="password"'.($placeholders ? ' placeholder="'._ws('Password').'"' : '').'>'.
+                        ($error ? '<em class="wa-error-msg">'.$error.'</em>' : '').'
                     </div>
+                </div>';
+
+        $auth_config = wa()->getAuthConfig();
+        if (!empty($auth_config['rememberme'])) {
+            $html .= '<div class="wa-field wa-field-remember-me">
+                <div class="wa-value">
+                    <label><input name="remember" type="checkbox" '.(waRequest::post('remember') ? 'checked="checked"' : '').' value="1"> '._ws('Remember me').'</label>
                 </div>
-                <div class="wa-field">
+            </div>';
+        }
+
+        $html .= '<div class="wa-field">
                     <div class="wa-value wa-submit">
                         <input type="hidden" name="wa_auth_login" value="1">
                         <input type="submit" value="'._ws('Sign In').'">
@@ -650,27 +728,30 @@ HTML;
                         &nbsp;
                         <a href="'.$this->getUrl('/signup').'">'._ws('Sign up').'</a>
                     </div>
-                </div>'.
+                </div>'.(waRequest::param('secure') ? $this->csrf() : '').
             ($form ? '</form>' : '').'
         </div>';
+        return $html;
     }
 
-    public function forgotPasswordForm($error = '')
+    public function forgotPasswordForm($error = '', $placeholders = false)
     {
         return '<div class="wa-form">
     <form action="" method="post">
         <div class="wa-field">
             <div class="wa-name wa-field-email">'._ws('Email').'</div>
             <div class="wa-value">
-                <input'.($error ? ' class="wa-error"' : '').' type="text" name="login" value="'.htmlspecialchars(waRequest::request('login', '', waRequest::TYPE_STRING)).'" autocomplete="off">
+                <input'.($error ? ' class="wa-error"' : '').' type="text" name="login" value="'.htmlspecialchars(waRequest::request('login', '', waRequest::TYPE_STRING)).'" autocomplete="off" '.($placeholders ? ' placeholder="'._ws('Email').'"' : '').'>
                 '.($error ? '<em class="wa-error-msg">'.$error.'</em>' : '').'
             </div>
         </div>
         <div class="wa-field">
             <div class="wa-value wa-submit">
-                <input type="submit" value="'._ws('Reset password').'"> <a href="'.$this->getUrl('/login').'">'._ws('I remember it now!').'</a>
+                <input type="submit" value="'._ws('Reset password').'">
+                &nbsp;
+                <a href="'.$this->getUrl('/login').'">'._ws('I remember it now!').'</a>
             </div>
-        </div>
+        </div>'.(waRequest::param('secure') ? $this->csrf() : '').'
     </form>
 </div>';
 
@@ -697,7 +778,7 @@ HTML;
             <div class="wa-value wa-submit">
                 <input type="submit" value="'._ws('Save and log in').'">
             </div>
-        </div>
+        </div>'.(waRequest::param('secure') ? $this->csrf() : '').'
     </form>
 </div>';
     }
@@ -751,7 +832,7 @@ HTML;
         return $fields;
     }
 
-    public function signupForm($errors = array())
+    public function signupForm($errors = array(), $placeholders = false)
     {
         $fields = $this->signupFields($errors);
         $html = '<div class="wa-form"><form action="'.$this->signupUrl().'" method="post">';
@@ -772,9 +853,16 @@ HTML;
                         /**
                          * @var waContactField $sf
                          */
-                        $html .= $this->signupFieldHTML($sf, array('parent' => $field_id, 'id' => $sf->getId()), $field_error);
+                        $params = array('parent' => $field_id, 'id' => $sf->getId());
+                        if ($placeholders) {
+                            $params['placeholder'] = $sf->getName();
+                        }
+                        $html .= $this->signupFieldHTML($sf, $params, $field_error);
                     }
                 } else {
+                    if ($placeholders) {
+                        $field[1]['placeholder'] = $f->getName();
+                    }
                     $html .= $this->signupFieldHTML($f, $field[1], $field_error);
                 }
             } else {
@@ -790,9 +878,13 @@ HTML;
             }
             $html .= '</div></div>';
         }
+        $signup_submit_name = !empty($config['params']['button_caption']) ? htmlspecialchars($config['params']['button_caption']) : _ws('Sign Up');
         $html .= '<div class="wa-field"><div class="wa-value wa-submit">
-            <input type="submit" value="'._ws('Sign Up').'"> '.sprintf(_ws('or <a href="%s">login</a> if you already have an account'), $this->getUrl('/login')).'
+            <input type="submit" value="'.$signup_submit_name.'"> '.sprintf(_ws('or <a href="%s">login</a> if you already have an account'), $this->getUrl('/login')).'
         </div></div>';
+        if (waRequest::param('secure')) {
+            $html .= $this->csrf();
+        }
         $html .= '</form></div>';
         return $html;
     }
@@ -804,35 +896,56 @@ HTML;
         // get value
         if (isset($params['parent'])) {
             $parent_value = $data[$params['parent']];
-            $params['value'] = $parent_value[$params['id']];
+            $params['value'] = isset($parent_value[$params['id']]) ? $parent_value[$params['id']] : '';
         } else {
             $params['value'] = isset($data[$params['id']]) ? $data[$params['id']] : '';
         }
 
-        $name = $f->getName();
-        if (isset($params['ext'])) {
-            $exts = $f->getParameter('ext');
-            if (isset($exts[$params['ext']])) {
-                $name .= ' ('._ws($exts[$params['ext']]).')';
-            } else {
-                $name .= ' ('.$params['ext'].')';
+        $config = wa()->getAuthConfig();
+        if (!empty($config['fields'][$f->getId()]['caption'])) {
+            $name = htmlspecialchars($config['fields'][$f->getId()]['caption']);
+        } else {
+            $name = $f->getName(null, true);
+
+            if (isset($params['ext'])) {
+                $exts = $f->getParameter('ext');
+                if (isset($exts[$params['ext']])) {
+                    $name .= ' ('._ws($exts[$params['ext']]).')';
+                } else {
+                    $name .= ' ('.$params['ext'].')';
+                }
             }
         }
         $params['namespace'] = 'data';
-        if ($f->isMulti()) {
+        $is_multi = $f->isMulti();
+        if ($is_multi) {
             $f->setParameter('multi', false);
         }
-        $html = '<div class="wa-field wa-field-'.$f->getId().'">
-                <div class="wa-name">'.$name.'</div>
-                <div class="wa-value">'.$f->getHTML($params, $error !== false ? 'class="wa-error"' : '');
-        if ($error) {
-            $html .= '<em class="wa-error-msg">'.$error.'</em>';
+        $attrs = $error !== false ? 'class="wa-error"' : '';
+        if (!empty($config['fields'][$f->getId()]['placeholder'])) {
+            $attrs .= ' placeholder="'.htmlspecialchars($config['fields'][$f->getId()]['placeholder']).'"';
+        } elseif (!empty($params['placeholder'])) {
+            $attrs .= ' placeholder="'.htmlspecialchars($params['placeholder']).'"';
         }
-        $html .= '</div></div>';
+		
+		if ($f instanceof waContactHiddenField) {
+			$html = $f->getHTML($params, $attrs);
+		} else {
+			$html = '<div class="wa-field wa-field-'.$f->getId().'">
+					<div class="wa-name">'.$name.'</div>
+					<div class="wa-value">'.$f->getHTML($params, $attrs);
+			if ($error) {
+				$html .= '<em class="wa-error-msg">'.$error.'</em>';
+			}
+			$html .= '</div></div>';
+		}
+        if ($is_multi) {
+            $f->setParameter('multi', $is_multi);
+        }
         return $html;
     }
 
-    public function authAdapters($return_array = false)
+    public function authAdapters($return_array = false, $options = array())
     {
         $adapters = wa()->getAuthAdapters();
         if ($return_array) {
@@ -842,28 +955,35 @@ HTML;
             return '';
         }
         $html = '<div class="wa-auth-adapters"><ul>';
-        $url = wa()->getRootUrl(false, true).'oauth.php?app='.$this->app().'&amp;provider=';
+
         foreach ($adapters as $adapter) {
             /**
              * @var waAuthAdapter $adapter
              */
-            $html .= '<li><a href="'.$url.$adapter->getId().'"><img alt="'.$adapter->getName().'" src="'.$adapter->getIcon().'"/>'.$adapter->getName().'</a></li>';
+            $html .= '<li class="wa-auth-adapter-'.$adapter->getId().'"><a href="'.$adapter->getUrl().'"><img alt="'.$adapter->getName().'" src="'.$adapter->getIcon().'"/>'.$adapter->getName().'</a></li>';
         }
         $html .= '</ul><p>';
         $html .= _ws("Authorize either by entering your contact information, or through one of the websites listed above.");
         $html .= '</p></div>';
+        $w = isset($options['width']) ? $options['width'] : 600;
+        $h = isset($options['height']) ? $options['height'] : 500;
         $html .= <<<HTML
 <script type="text/javascript">
 $("div.wa-auth-adapters a").click(function () {
-    var left = (screen.width - 600) / 2;
-    var top = (screen.height - 400) / 2;
-    window.open($(this).attr('href'),'oauth', "width=600,height=400,left="+left+",top="+top+",status=no,toolbar=no,menubar=no");
+    var left = (screen.width - {$w}) / 2;
+    var top = (screen.height - {$h}) / 2;
+    window.open($(this).attr('href'),'oauth', "width={$w},height={$h},left="+left+",top="+top+",status=no,toolbar=no,menubar=no");
     return false;
 });
 </script>
 HTML;
 
         return $html;
+    }
+
+    public function debug()
+    {
+        return waSystemConfig::isDebug();
     }
 
     public function oauth($provider, $config, $token, $code = null)

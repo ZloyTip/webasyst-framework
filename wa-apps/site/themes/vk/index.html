@@ -1,7 +1,6 @@
 <!DOCTYPE html>
-
-{$vk_app_id = "YOUR_APP_ID"}
-{$vk_app_secret = "YOUR_APP_SECRET"}
+{$vk_app_id = $theme_settings.vk_app_id}
+{$vk_app_secret = $theme_settings.vk_app_secret}
 {$viewer_id = $wa->get('viewer_id')}
 {if $viewer_id}
     {$auth_key = md5("`$vk_app_id`_`$viewer_id`_`$vk_app_secret`")}
@@ -9,26 +8,25 @@
         {$wa->storage('vk_user_id', $viewer_id)}
     {/if}
 {/if}
-
 {$vk_tabs = [
     [
         'url' => '/',
-        'name' => 'My new VK app'
+        'name' => 'Главная'
     ]
     ,
     [
         'url' => '/shop/',
-        'name' => 'Shop online!'
+        'name' => 'Магазин'
     ]
     ,
     [
         'url' => '/blog/',
-        'name' => 'My blog'
+        'name' => 'Новости'
     ]
     ,
     [
         'url' => '/photos/',
-        'name' => 'My photo gallery'
+        'name' => 'Фотогалерея'
     ]
 ]}
 {*
@@ -68,7 +66,7 @@
     {$wa->css()} {* links active plugins CSS *}
     
     <!-- js -->
-    <script type="text/javascript" src="{$wa_url}wa-content/js/jquery/jquery-1.8.2.min.js"></script>
+    <script type="text/javascript" src="{$wa_static_url}wa-content/js/jquery/jquery-1.8.2.min.js"></script>
     <!-- vk iframe apps js -->
     <script src="//vk.com/js/api/xd_connection.js?2"  type="text/javascript"></script>
     <!-- internal shop-script js for vk iframe app integration -->
@@ -80,7 +78,7 @@
     
     {include file="`$wa_active_theme_path`/head.html" inline}
     
-    {$wa->headJs()} {* links Google Analytics tracking code and current site's custom JS (Site app) *}
+    {$wa->head()} {* links Google Analytics tracking code and current site's custom JS (Site app) *}
 </head>
 <body id="{$wa_app}">
     <div id="header">
@@ -94,11 +92,6 @@
                          <i class="icon16 cart"></i>[s`Cart`]: <strong class="cart-total">{wa_currency_html($cart_total, $wa->shop->currency())}</strong>
                      </a>
                 </div>
-
-                <!-- search form (app dependent) -->
-                <div class="search float-right">
-                    {include file="`$wa_active_theme_path`/searchform.html" inline}
-                </div> 
             {/if}   
             
             <h2 class="block vk-app-title float-left">
@@ -108,13 +101,16 @@
                 
             <div id="vk_like" class="float-left" style="clear: none !important;"></div>
             <script type="text/javascript">
-             VK.Widgets.Like('vk_like', { width: 201, pageUrl: '{$wa->domainUrl()}' } );
+             VK.Widgets && VK.Widgets.Like('vk_like', { width: 201, pageUrl: '{$wa->domainUrl()}' } );
             </script>
 
             <div class="clear-both"></div>               
 
-            <!-- phone number -->
+            <!-- phone & product search -->
             {if $wa->shop && $wa->shop->settings('phone')}
+                <div class="search float-right">
+                    {include file="`$wa_active_theme_path`/searchform.html" inline}
+                </div> 
                 <div class="block float-right">
                     [s`Order by phone`]: <strong>{$wa->shop->settings('phone')}</strong>
                 </div>

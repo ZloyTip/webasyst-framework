@@ -20,14 +20,20 @@ return array(
 
         '<blog_url>/<post_url>/comment/'                           => 'frontend/comment',
         '<post_url>/comment/'                                      => 'frontend/comment',
+        'my/' => array(
+            'module' => 'frontend',
+            'action' => 'my',
+            'secure' => true,
+        ),
         'login/'                                                   => 'login',
         'forgotpassword/'                                          => 'forgotpassword',
         'signup/'                                                  => 'signup',
+        'data/regions/'                                            => 'frontend/regions',
         'logout/'                                                  => 'frontend/logout',
         'rss/'                                                     => 'frontend/rss',
         'author/<contact_id>/'                                     => 'frontend',
+        '<blog_url>/postpreview/'                                  => 'frontend/previewTemplate',
         '<blog_url>/<post_url>/'                                   => 'frontend/post',
-
         '<blog_url>/'                                              => 'frontend',
         ''                                                         => 'frontend',
     ),
@@ -35,9 +41,15 @@ return array(
     1 => array(
         '<post_url>/comment/'                           => 'frontend/comment',
         'logout/'                                       => 'frontend/logout',
+        'my/' => array(
+            'module' => 'frontend',
+            'action' => 'my',
+            'secure' => true,
+        ),
         'login/'                                        => 'login',
         'forgotpassword/'                               => 'forgotpassword',
         'signup/'                                       => 'signup',
+        'data/regions/'                                 => 'frontend/regions',
         'rss/'                                          => 'frontend/rss',
         'author/<contact_id>/'                          => 'frontend',
 
@@ -45,15 +57,22 @@ return array(
         "<year:{$year}>/<month:{$month}>/<day:{$day}>/" => 'frontend',
         "<year:{$year}>/<month:{$month}>/"              => 'frontend',
         "<year:{$year}>/"                               => 'frontend',
+        'postpreview/'                                  => 'frontend/previewTemplate',
         '<post_url>/'                                   => 'frontend/post',
         ''                                              => 'frontend',
     ),
     2 => array(
         '<post_url>/comment/'                                                     => 'frontend/comment',
         'logout/'                                                                 => 'frontend/logout',
+        'my/' => array(
+            'module' => 'frontend',
+            'action' => 'my',
+            'secure' => true,
+        ),
         'login/'                                                                  => 'login',
         'forgotpassword/'                                                         => 'forgotpassword',
         'signup/'                                                                 => 'signup',
+        'data/regions/'                                                           => 'frontend/regions',
         "{$blog_prefix}/rss/"                                                     => 'frontend/rss',
         'rss/'                                                                    => 'frontend/rss',
         'author/<contact_id>/'                                                    => 'frontend',
@@ -69,6 +88,7 @@ return array(
         "{$blog_prefix}/<year:{$year}>/"                                          => 'frontend',
 
         "{$blog_prefix}/<blog_url>/"                                              => 'frontend',
+        'postpreview/'                                                            => 'frontend/previewTemplate',
         '<post_url>/'                                                             => 'frontend/post',
         ''                                                                        => 'frontend',
     ),

@@ -22,6 +22,8 @@ class photosAlbumSaveController extends waJsonController
             $parent = $this->album_model->getById($parent_id);
         }
 
+        $url = waRequest::post('url', null, waRequest::TYPE_STRING_TRIM);
+
         $group_ids = null;
         $status = waRequest::post('status', 0, waRequest::TYPE_INT);
         if (!$status) {
@@ -31,6 +33,11 @@ class photosAlbumSaveController extends waJsonController
                 $status = -1;
                 $group_ids = array(-$this->getUser()->getId());
             }
+        }
+
+        $name = waRequest::post('name', '', waRequest::TYPE_STRING_TRIM);
+        if ($name === '0') {
+            $name = '0 ';
         }
 
         if (!$this->id) {
@@ -46,7 +53,6 @@ class photosAlbumSaveController extends waJsonController
                 throw new waException(_w("Parent album is smart"));
             }
 
-            $name = waRequest::post('name', '', waRequest::TYPE_STRING_TRIM);
             $data = array(
                 'name' => $name,
                 'status' => $status,
@@ -56,7 +62,7 @@ class photosAlbumSaveController extends waJsonController
             if ($status <= 0) {
                 $data['hash'] = md5(uniqid(time(), true));
             } else {
-                $data['url'] = $this->album_model->suggestUniqueUrl(photosPhoto::suggestUrl($name));
+                $data['url'] = $this->album_model->suggestUniqueUrl(photosPhoto::suggestUrl(strlen($url) ? $url : $name));
             }
             if ($type == photosAlbumModel::TYPE_DYNAMIC) {
                 $data['conditions'] = $this->getPrepareConditions();
@@ -93,8 +99,6 @@ class photosAlbumSaveController extends waJsonController
             $params = $params ? $params : null;
 
             $description = waRequest::post('description', null, waRequest::TYPE_STRING_TRIM);
-            $name = waRequest::post('name', '', waRequest::TYPE_STRING_TRIM);
-            $url = waRequest::post('url', null, waRequest::TYPE_STRING_TRIM);
 
             $data = array(
                 'status' => $status,
@@ -177,7 +181,7 @@ class photosAlbumSaveController extends waJsonController
                     unset($data['url']);
                 }
             } else {
-                if (empty($data['url'])) {
+                if (!isset($data['url']) || !strlen($data['url'])) {
                     $data['url'] = photosPhoto::suggestUrl($data['name']);
                 }
             }

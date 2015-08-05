@@ -18,6 +18,9 @@ class waAuth implements waiAuth
         'cookie_expire' => 2592000,
     );
 
+    /**
+     * @param array $options
+     */
     public function __construct($options = array())
     {
         if (is_array($options)) {
@@ -64,6 +67,10 @@ class waAuth implements waiAuth
         return $result;
     }
 
+    /**
+     * @return array|bool|null
+     * @throws waException
+     */
     public function isAuth()
     {
         $info = waSystem::getInstance()->getStorage()->read('auth_user');
@@ -74,27 +81,46 @@ class waAuth implements waiAuth
             }
         }
         // check options
-        if ($info && $info['id'] && (!$this->getOption('is_user') || !empty($info['is_user']))) {
+        if ($info && $info['id'] && (!$this->getOption('is_user') || ifempty($info['is_user']) > 0)) {
             return $info;
         }
         return false;
     }
 
+    /**
+     * @param string $email
+     * @return array
+     */
+    protected function getByEmail($email)
+    {
+        $model = new waContactModel();
+        $sql = "SELECT c.* FROM wa_contact c
+                JOIN wa_contact_emails e ON c.id = e.contact_id
+                WHERE ".($this->options['is_user'] ? "c.is_user = 1 AND " : "")."e.email LIKE s:email AND e.sort = 0 AND c.password != ''
+                ORDER BY c.id LIMIT 1";
+        return $model->query($sql, array('email' => $email))->fetch();
+    }
+
+    /**
+     * @param string $login
+     * @return array
+     * @throws waException
+     */
     public function getByLogin($login)
     {
         $result = array();
         $model = new waContactModel();
         if ($this->options['login'] == 'login') {
             $result = $model->getByField('login', $login);
+            if (!$result) {
+                $result = $this->getByEmail($login);
+            }
         } elseif ($this->options['login'] == 'email') {
-            if (strpos($login, '@') === false) {
+            if (strpos($login, '@') !== false) {
+                $result = $this->getByEmail($login);
+            }
+            if (!$result) {
                 $result = $model->getByField('login', $login);
-            } else {
-                $sql = "SELECT c.* FROM wa_contact c
-                JOIN wa_contact_emails e ON c.id = e.contact_id
-                WHERE ".($this->options['is_user'] ? "c.is_user = 1 AND " : "")."e.email LIKE s:email AND e.sort = 0 AND c.password != ''
-                ORDER BY c.id LIMIT 1";
-                $result = $model->query($sql, array('email' => $login))->fetch();
             }
         }
         if ($result) {
@@ -103,28 +129,28 @@ class waAuth implements waiAuth
         return $result;
     }
 
+    /**
+     * @param array $data - contact/user info
+     * @throws waException
+     */
     protected function checkBan($data)
     {
-        $contact_data_model = new waContactDataModel();
-        $rows = $contact_data_model->getByField(array(
-            'contact_id' => $data['id'],
-            'field' => array('is_banned', 'banned_reason')
-        ), true);
-        $result = array();
-        foreach ($rows as $row) {
-            $result[$row['field']] = $row['value'];
-        }
-        if (!empty($result['is_banned'])) {
-            throw new waException(isset($result['banned_reason']) ? $result['banned_reason'] : _ws('Access denied.'));
+        if ($data['is_user'] == -1) {
+            throw new waException(_ws('Access denied.'));
         }
     }
 
+    /**
+     * @param $params
+     * @return array|bool
+     * @throws waException
+     */
     protected function _auth($params)
     {
         if ($params && isset($params['id'])) {
             $contact_model = new waContactModel();
             $user_info = $contact_model->getById($params['id']);
-            if ($user_info && ($user_info['is_user'] || !$this->options['is_user'])) {
+            if ($user_info && ($user_info['is_user'] > 0 || !$this->options['is_user'])) {
                 waSystem::getInstance()->getResponse()->setCookie('auth_token', null, -1);
                 return $this->getAuthData($user_info);
             }
@@ -143,8 +169,35 @@ class waAuth implements waiAuth
         }
         if ($login && strlen($login)) {
             $user_info = $this->getByLogin($login);
-            if ($user_info && ($user_info['is_user'] || !$this->options['is_user']) &&
+            if ($user_info && ($user_info['is_user'] > 0 || !$this->options['is_user']) &&
                 waContact::getPasswordHash($password) === $user_info['password']) {
+                $auth_config = wa()->getAuthConfig();
+                if (wa()->getEnv() == 'frontend' && !empty($auth_config['params']['confirm_email'])) {
+                    $contact_emails_model = new waContactEmailsModel();
+                    $email_row = $contact_emails_model->getByField(array('contact_id' => $user_info['id'], 'sort' => 0));
+                    if ($email_row && $email_row['status'] == 'unconfirmed') {
+                        $login_url = wa()->getRouteUrl((isset($auth_config['app']) ? $auth_config['app'] : '').'/login', array());
+                        $html = sprintf(_ws('A confirmation link has been sent to your email address provided during the signup. Please click this link to confirm your email and to sign in. <a class="send-email-confirmation" href="%s">Resend the link</a>'), $login_url.'?send_confirmation=1');
+                        $html = '<div class="block-confirmation-email">'.$html.'</div>';
+                        $html .= <<<HTML
+<script type="text/javascript">
+    $(function () {
+        $('a.send-email-confirmation').click(function () {
+            $.post($(this).attr('href'), {
+                    login: $(this).closest('form').find("input[name='login']").val()
+                }, function (response) {
+                $('.block-confirmation-email').html(response);
+            });
+            return false;
+        });
+    });
+</script>
+HTML;
+
+                        throw new waException($html);
+                    }
+                }
+
                 $response = waSystem::getInstance()->getResponse();
                 // if remember
                 if (waRequest::post('remember')) {
@@ -169,7 +222,10 @@ class waAuth implements waiAuth
         }
     }
 
-
+    /**
+     * @return array|bool
+     * @throws waException
+     */
     protected function _authByCookie()
     {
         if ($this->getOption('remember_enabled') && $token = waRequest::cookie('auth_token')) {
@@ -178,7 +234,7 @@ class waAuth implements waiAuth
             $id = substr($token, 15, -15);
             $user_info = $model->getById($id);
             $this->checkBan($user_info);
-            if ($user_info && ($user_info['is_user'] || !$this->options['is_user']) &&
+            if ($user_info && ($user_info['is_user'] > 0 || !$this->options['is_user']) &&
                 $token === $this->getToken($user_info)) {
                 $response->setCookie('auth_token', $token, time() + 2592000, null, '', false, true);
                 return $this->getAuthData($user_info);
@@ -190,6 +246,10 @@ class waAuth implements waiAuth
     }
 
 
+    /**
+     * @param $user_info
+     * @return array
+     */
     protected function getAuthData($user_info)
     {
         return array(
@@ -200,6 +260,10 @@ class waAuth implements waiAuth
         );
     }
 
+    /**
+     * @param $user_info
+     * @return string
+     */
     public function getToken($user_info)
     {
         $hash = md5($user_info['create_datetime'] . $user_info['login'] . $user_info['password']);

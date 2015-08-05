@@ -25,12 +25,13 @@ abstract class waJsonController extends waController
     
     public function run($params = null)
     {
-        $this->execute();
+        parent::run($params);
         $this->display();
     }
 
     public function display()
     {
+        $this->getResponse()->addHeader('Content-Type', 'application/json');
         $this->getResponse()->sendHeaders();
         if (!$this->errors) {
             $data = array('status' => 'ok', 'data' => $this->response);

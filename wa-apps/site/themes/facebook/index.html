@@ -1,8 +1,6 @@
 <!DOCTYPE html>
-
-{$fb_app_id = 'YOUR_APP_ID'}
+{$fb_app_id = $theme_settings.facebook_app_id}
 {$fb_url = "https://apps.facebook.com/`$fb_app_id`/"}
-
 {if !$wa->user()->isAuth() || !$wa->user('facebook_id')}
     {if $wa->post("signed_request")}
     {$fb_signed_request = explode('.', $wa->post("signed_request"), 2)}
@@ -12,7 +10,6 @@
     {/if}
     {/if}
 {/if}
-
 {$fb_tabs = [
     [
         'url' => '/',
@@ -48,7 +45,6 @@
     The 'url' must represent the URL you have entered in your Site routing settings for the appropriate Facebook-enabled app, i.e. Shop-Script, Blog, Photos, Site, etc.
 
 *}
-
 <html xmlns:fb="https://www.facebook.com/2008/fbml">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
@@ -69,7 +65,7 @@
     {$wa->css()} {* links active plugins CSS *}
     
     <!-- js -->
-    <script type="text/javascript" src="{$wa_url}wa-content/js/jquery/jquery-1.8.2.min.js"></script>
+    <script type="text/javascript" src="{$wa_static_url}wa-content/js/jquery/jquery-1.8.2.min.js"></script>
     <!-- internal shop-script js for facebook iframe app integration -->
     <script type="text/javascript" src="{$wa_theme_url}facebook.js?v{$wa_theme_version}"></script>
     <script type="text/javascript" src="//connect.facebook.net/{$wa->locale()}/all.js"></script>
@@ -95,7 +91,7 @@
     
     {include file="`$wa_active_theme_path`/head.html" inline}
     
-    {$wa->headJs()} {* links Google Analytics tracking code and current site's custom JS (Site app) *}
+    {$wa->head()} {* links Google Analytics tracking code and current site's custom JS (Site app) *}
 </head>
 <body id="{$wa_app}">
     <div id="fb-root"></div>

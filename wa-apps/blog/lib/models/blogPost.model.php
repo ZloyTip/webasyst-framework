@@ -329,7 +329,7 @@ SQL;
              * @return array[string][string][]string $return['%plugin_id%']['where'] Where conditions
              * @return array[string][string][]string $return['%plugin_id%']['order'] order conditions
              */
-            $res = wa()->event('search_posts_'.wa()->getEnv(), $options);
+            $res = wa('blog')->event('search_posts_'.wa()->getEnv(), $options);
             foreach ($res as $plugin_options) {
                 foreach ($plugin_options as $properties => $values) {
                     if ($values) {
@@ -618,14 +618,14 @@ SQL;
         if (isset($data['status'])) {
             switch ($data['status']) {
                 case self::STATUS_PUBLISHED:
-                    if (!isset($data['datetime']) || !$data['datetime']) {
-                        if (!isset($current_data['datetime']) || !$current_data['datetime']) {
-                            $data['datetime'] = date("Y-m-d H:i:s");
-                        } elseif (isset($current_data['status']) && !in_array($current_data['status'], array(self::STATUS_PUBLISHED, self::STATUS_SCHEDULED))) {
-                            $data['datetime'] = date("Y-m-d H:i:s");
-                        } else {
+                    if (empty($current_data['status']) || in_array($current_data['status'], array(self::STATUS_DEADLINE, self::STATUS_DRAFT, self::STATUS_SCHEDULED))) {
+                        $data['datetime'] = date("Y-m-d H:i:s");
+                    } else if (ifset($current_data['status']) == self::STATUS_PUBLISHED) {
+                        if (empty($data['datetime'])) {
                             unset($data['datetime']);
                         }
+                    } else {
+                        unset($data['datetime']);
                     }
                     break;
                 case self::STATUS_DRAFT:
@@ -917,15 +917,23 @@ SQL;
     {
         $messages = array();
 
-        if ($data['blog_status'] != blogBlogModel::STATUS_PRIVATE) {
+        if (!empty($options['update_url_on_error'])) {
+
+            $data['url'] = $this->genUniqueUrl(ifempty($data['url'], $data['title']));
+
+        } else if ($data['blog_status'] != blogBlogModel::STATUS_PRIVATE) {
 
             if (!empty($data['id'])) {
                 $url_validator = new blogSlugValidator(array(
                     'id' => $data['id']
                 ));
             } else {
-                if (isset($options['transliterate']) && $options['transliterate'] && !$data['url'] && $data['title']) {
-                    $data['url'] = blogHelper::transliterate($data['title']);
+                if (!empty($options['transliterate']) && !$data['url']) {
+                    if ($data['title']) {
+                        $data['url'] = blogHelper::transliterate($data['title']);
+                    } else {
+                        $data['url'] = $this->genUniqueUrl('');
+                    }
                 }
                 $url_validator = new blogSlugValidator();
             }

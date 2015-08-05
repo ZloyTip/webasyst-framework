@@ -8,6 +8,7 @@ return array(
         48 => 'img/blog.png',
         96 => 'img/blog96.png',
     ),
+    'sash_color' => '#f0b100',
     'rights' => true,
     'frontend' => true,
     'auth' => true,
@@ -15,8 +16,12 @@ return array(
     'plugins' => true,
     'pages' => true,
     'mobile' => true,
-    'version' => '1.2.1',
+    'version' => '1.3.2',
     'critical' => '1.0.0',
     'vendor' => 'webasyst',
-    'csrf' => true
+    'csrf' => true,
+    'my_account' => true,
+    'routing_params' => array(
+        'blog_url_type' => 1,
+    ),
 );

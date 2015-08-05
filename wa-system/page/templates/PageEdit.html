@@ -7,6 +7,14 @@
         {if $page}
         <div class="float-right ie-menu-h-fix">
             <ul class="menu-h">
+
+                <!-- plugin hook: 'backend_page_edit.action_button_li' -->
+                {* @event backend_page_edit.%plugin_id%.action_button_li *}
+                {foreach $backend_page_edit as $_}{ifset($_.action_button_li)}{/foreach}
+
+                {if !empty($page.update_datetime)}
+                    <li><h3 class="gray">{$page.update_datetime|wa_datetime:"humandatetime"}</h3></li>
+                {/if}
                 <li><a href="#" class="inline-link" id="wa-page-settings-toggle"><i class="icon16 edit"></i><b><i>[s`Page settings`]</i></b></a></li>
                 <li><a class="wa-page-delete" href="?module=pages&action=delete"><i class="icon16 delete"></i>[s`Delete`]</a></li>
             </ul>
@@ -60,7 +68,7 @@
                     <div class="field">
                         <div class="name bold">[s`Page name`]</div>
                         <div class="value">
-                            <input type="text" class="bold large" name="info[name]" value="{if $page}{$page.name|escape}{/if}" />
+                            <input type="text" class="bold large long" name="info[name]" value="{if $page}{$page.name|escape}{/if}" />
                         </div>
                     </div>
                     <div class="field">
@@ -72,6 +80,11 @@
                             </ul>
 
                         </div>
+                        {if !empty($page.id)}
+                        <div class="value gray">
+                            id: <strong>{$page.id}</strong>
+                        </div>
+                        {/if}
                     </div>
 
                     <div class="field wa-page-url">
@@ -107,9 +120,60 @@
                             {/if}
                         </div>
                         {/foreach}
-
-                        {if !empty($page_edit)}{foreach $page_edit as $_}{$_}{/foreach}{/if}
+                        <div class="field">
+                            <div class="name">[s`Social sharing`]</div>
+                            <div class="value no-shift">
+                                <label><input class="og-checkbox" type="checkbox" {if empty($og_params)}checked{/if}> [s`Use these meta tags for social sharing too`]</label>
+                            </div>
+                        </div>
                     </div>
+
+                    <div class="field-group og-group" {if empty($og_params)}style="display: none;"{/if}>
+                        <div class="field">
+                            <div class="name">[s`Social sharing title`] <span class="hint">og:title</span></div>
+                            <div class="value">
+                                <input name="og[title]" class="long bold" value="{ifset($og_params.title, '')|escape}" {if empty($og_params)}disabled{/if}>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <div class="name">[s`Social sharing image URL`] <span class="hint">og:image</span></div>
+                            <div class="value">
+                                <input name="og[image]" class="long" value="{ifset($og_params.image, '')|escape}" {if empty($og_params)}disabled{/if}>
+                                <br>
+                                <span class="hint">[s`If not set, a social network will attempt to determine preview image on it’s own.`]</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <div class="name">[s`Social sharing video URL`] <span class="hint">og:video</span></div>
+                            <div class="value">
+                                <input name="og[video]" class="long" value="{ifset($og_params.video, '')|escape}" {if empty($og_params)}disabled{/if}>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <div class="name">[s`Social sharing description`] <span class="hint">og:description</span></div>
+                            <div class="value">
+                                <textarea name="og[description]"{if empty($og_params)}disabled{/if}>{ifset($og_params.description, '')|escape}</textarea>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <div class="name">[s`Social sharing type`] <span class="hint">og:type</span></div>
+                            <div class="value">
+                                <input name="og[type]" placeholder="" value="{ifset($og_params.type, '')}" {if empty($og_params)}disabled{/if}>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="value">
+                                <span class="hint">[s`Please refer to <a href="http://ogp.me" target="_blank">Open Graph</a> protocol site for more information on social sharing meta tags and available values.`]</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {if !empty($page_edit)}
+                    <div class="field-group">
+                    {foreach $page_edit as $_}{$_}{/foreach}
+                    </div>
+                    {/if}
 
                     <div class="field">
                         <div class="name">[s`Page custom parameters`]</div>
@@ -176,7 +240,7 @@
                         if (el.children('b').length) {
                             el = el.children('b');
                         }
-                        $('#wa-page-content').waEditor('insert', el.text());
+                        $('#wa-page-content').waEditor('insert.html', el.text());
                         return false;
                     });
                 </script>
@@ -199,6 +263,13 @@
     var wa_app = "{$wa->app()}";
 
     $(function () {
+        $('.og-checkbox').change(function () {
+            if ($(this).is(':checked')) {
+                $('.og-group').hide().find('input,textarea').attr('disabled', 'disabled');
+            } else {
+                $('.og-group').show().find('input,textarea').removeAttr('disabled');
+            }
+        });
         {if $options.is_ajax}
             {if $page}
             document.title = "{$page.name|escape} — {$wa->appName()}";
@@ -250,23 +321,44 @@
             return false;
         });
 
-        {if !$page || !$page.id}
+        {if (!$page || !$page.id) && empty($options.disable_auto_url) }
+            $.fn.onKeyFinish = function (defer, callback) {
+                return this.each(function () {
+                    var that = $(this);
+                    that.currentValue = that.val();
+                    that.interval = null;
+                    $(this).off('keyup.wapages');
+                    $(this).on('keyup.wapages', function (e) {
+                        clearInterval(that.interval);
+                        if (that.currentValue != that.val()) {
+                            that.interval = setInterval(function () {
+                                clearInterval(that.interval);
+                                callback.call(that);
+                                that.currentValue = that.val();
+                            }, defer);
+                        }
+                    });
+                });
+            };
             $("#wa-page-settings input:first").focus();
-            $('#wa-page-settings input[name="info[name]"]').blur(function () {
+            $('#wa-page-settings input[name="info[name]"]').onKeyFinish(300, function () {
                 if (!$("#wa-page-form-translit").length) {
                     $("#wa-page-form").append('<input id="wa-page-form-translit" type="hidden" name="translit" value="1">');
                 }
                 var url = $('#wa-page-settings input[name="info[url]"]');
-                if ($(this).val() && !url.val()) {
+                if ($(this).val() && (!url.val() || !url.data('changed'))) {
                     $.post("?module=pages&action=translit", { str: $(this).val()}, function (response) {
                         $("#wa-page-form-translit").remove();
                         if (response.status == 'ok') {
-                            if (!url.val()) {
+                            if (!url.val() || !url.data('changed')) {
                                 url.val(response.data.str);
                             }
                         }
                     }, "json");
                 }
+            });
+            $('#wa-page-settings input[name="info[url]"]').on('keyup', function () {
+               $(this).data('changed', 1);
             });
         {/if}
 

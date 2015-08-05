@@ -24,11 +24,36 @@ class waLayout extends waController
     * @var waTheme
     */
     protected $theme;
-    
+
 
     public function __construct()
     {
         $this->view = waSystem::getInstance()->getView();
+
+        if (wa()->getEnv() == 'frontend') {
+            // save utm to cookie
+            $utm = array();
+            foreach (waRequest::get() as $k => $v) {
+                if (substr($k, 0, 4) == 'utm_') {
+                    $utm[substr($k, 4)] = $v;
+                }
+            }
+            if ($utm) {
+                // save utm to cookie
+                wa()->getResponse()->setCookie('utm', json_encode($utm), time() + 30 * 86400, null, '', false, true);
+            }
+            // save referer
+            if ($ref = waRequest::server('HTTP_REFERER')) {
+                $ref_host = @parse_url($ref, PHP_URL_HOST);
+                if ($ref_host != waRequest::server('HTTP_HOST')) {
+                    wa()->getResponse()->setCookie('referer', waRequest::server('HTTP_REFERER'), time() + 30 * 86400, null, '', false, true);
+                }
+            }
+            // save landing page
+            if (!waRequest::cookie('landing')) {
+                wa()->getResponse()->setCookie('landing', waRequest::server('REQUEST_URI'), 0, null, '', false, true);
+            }
+        }
     }
 
 
@@ -73,7 +98,7 @@ class waLayout extends waController
             return 'templates/layouts/' . $this->template . $this->view->getPostfix();
         }
     }
-    
+
     protected function setThemeTemplate($template)
     {
         $this->template = 'file:'.$template;
@@ -84,10 +109,10 @@ class waLayout extends waController
     {
         return $this->getTheme()->getUrl();
     }
-    
+
     /**
-     * Return current theme 
-     * 
+     * Return current theme
+     *
      * @return waTheme
      */
     public function getTheme()
@@ -97,7 +122,7 @@ class waLayout extends waController
         }
         return $this->theme;
     }
-        
+
     public function assign($name, $value)
     {
         $this->blocks[$name] = $value;
@@ -107,12 +132,17 @@ class waLayout extends waController
     {
 
     }
-    
+
     public function display()
     {
         $this->execute();
         $this->view->assign($this->blocks);
-        waSystem::getInstance()->getResponse()->sendHeaders();
+
+        if ((wa()->getEnv() == 'frontend') && waRequest::param('theme_mobile') &&
+            (waRequest::param('theme') != waRequest::param('theme_mobile'))) {
+            wa()->getResponse()->addHeader('Vary', 'User-Agent');
+        }
+        wa()->getResponse()->sendHeaders();
         $this->view->cache(false);
         if ($this->view->autoescape() && $this->view instanceof waSmarty3View) {
             $this->view->smarty->loadFilter('pre', 'content_nofilter');

@@ -144,7 +144,9 @@ class waAutoload
         'waAutoload'               => 'autoload/waAutoload.class.php',
 
         'waFileCache'              => 'cache/waFileCache.class.php',
-        'waMemcachedCache'         => 'cache/waMemcachedCache.class.php',
+        'waMemcachedCacheAdapter'  => 'cache/adapters/waMemcachedCacheAdapter.class.php',
+        'waFileCacheAdapter'       => 'cache/adapters/waFileCacheAdapter.class.php',
+        'waXcacheCacheAdapter'     => 'cache/adapters/waXcacheCacheAdapter.class.php',
         'waRuntimeCache'           => 'cache/waRuntimeCache.class.php',
         'waSerializeCache'         => 'cache/waSerializeCache.class.php',
         'waSystemCache'            => 'cache/waSystemCache.class.php',
@@ -176,7 +178,7 @@ class waAutoload
         'waViewAction'             => 'controller/waViewAction.class.php',
         'waViewActions'            => 'controller/waViewActions.class.php',
         'waViewController'         => 'controller/waViewController.class.php',
-        'waWidget'                 => 'controller/waWidget.class.php',
+        'waWidget'                 => 'widget/waWidget.class.php',
 
         'waCurrency'               => 'currency/waCurrency.class.php',
 
@@ -241,6 +243,7 @@ class waAutoload
         'waArrayObjectDiff'        => 'util/waArrayObjectDiff.class.php',
         'waCSV'                    => 'util/waCSV.class.php',
         'waHtmlControl'            => 'util/waHtmlControl.class.php',
+        'waString'                 => 'util/waString.class.php',
         'waUtils'                  => 'util/waUtils.class.php',
 
         'waEmailValidator'         => 'validator/waEmailValidator.class.php',
@@ -256,8 +259,6 @@ class waAutoload
         'waView'                   => 'view/waView.class.php',
         'waViewHelper'             => 'view/waViewHelper.class.php',
         'waAppViewHelper'          => 'view/waAppViewHelper.class.php',
-
-        'waWidgets'                => 'widget/waWidgets.class.php',
 
         'waWorkflow'               => 'workflow/waWorkflow.class.php',
         'waWorkflowAction'         => 'workflow/waWorkflowAction.class.php',

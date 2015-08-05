@@ -73,7 +73,7 @@ class waContactForm
                             $subfields = array();
                             foreach($opts['fields'] as $sfid => $sfopts) {
                                 if (empty($old_subfields[$sfid])) {
-                                    waLog::log('Field '.$fid.':'.$sfid.' not found and is ignored in '.$file);
+                                    waLog::log('Field '.$fid.':'.$sfid.' not found and is ignored in '.(is_array($file) ? 'config' : $file));
                                     continue;
                                 }
                                 $subfields[$sfid] = self::getClone($old_subfields[$sfid], $sfopts);
@@ -200,14 +200,42 @@ class waContactForm
      */
     public function post($field_id = null)
     {
-        if ($this->post === null) {
-            $this->post = waRequest::post($this->opt('namespace'));
+        if ($this->post === null && waRequest::post($this->opt('namespace'))) {
+            $post = array();
+            $fields = $this->fields();
+            $is_frontend = wa()->getEnv() === 'frontend';
+            foreach ((array)waRequest::post($this->opt('namespace')) as $f_id => $value) {
+                if (isset($fields[$f_id])) {
+                    if ($is_frontend) {
+                        $my_profile = $fields[$f_id]->getParameter('my_profile');
+                        if ($my_profile && $my_profile == '2') {
+                            $post[$f_id] = $value;
+                        } else {
+                            $post[$f_id] = $value;    
+                        }
+                    } else {
+                        $post[$f_id] = $value;
+                    }
+                }
+            }
+            if ($post) {
+                $this->post = $post;
+            }
         }
-        if (!$this->post || !is_array($this->post)) {
+        if ($this->post === null || !is_array($this->post)) {
             return null;
         }
         if ($field_id) {
-            return ifset($this->post[$field_id]);
+            if (!isset($this->post[$field_id])) {
+                if (isset($this->values[$field_id])) {
+                    return $this->values[$field_id];
+                } else {
+                    return null;
+                }
+            } else {
+                return $this->post[$field_id];
+            }
+            
         }
         return $this->post;
     }
@@ -276,7 +304,7 @@ class waContactForm
      * @param string $field_id
      * @param boolean $with_errors whether to add class="error" and error text next to form fields
      */
-    public function html($field_id = null, $with_errors = true)
+    public function html($field_id = null, $with_errors = true, $placeholders = false)
     {
         $this->validateFields();
 
@@ -288,11 +316,12 @@ class waContactForm
 
             $opts = $this->options;
             $opts['id'] = $field_id;
+            $opts['my_profile'] = $this->fields[$field_id]->getParameter('my_profile');
 
             if (empty($this->contact)) {
                 $this->contact = new waContact();
             }
-            if ($this->post()) {
+            if ($this->post() !== null) {
                 $opts['value'] = $this->fields[$field_id]->set($this->contact, $this->post($field_id), array());
             } else if (isset($this->values[$field_id]) &&
                 ((is_array($this->values[$field_id]) && count($this->values[$field_id]) > 0) ||
@@ -310,6 +339,14 @@ class waContactForm
                 $opts['validation_errors'] = $this->errors[$field_id];
             }
 
+            // output password field with 'confirm password' field like composite fields
+            if ($field_id === 'password') {
+                $this->fields[$field_id]->setParameter('localized_names', _ws('New password'));
+                $opts['add_password_confirm'] = true;
+            }
+            if ($placeholders) {
+                $opts['placeholder'] = true;
+            }
             return $this->fields[$field_id]->getHTML($opts);
         }
 
@@ -319,6 +356,23 @@ class waContactForm
         $class_name = $this->opt('css_class_name', wa()->getEnv() == 'frontend' ? 'wa-name' : 'name');
         $result = '';
         foreach($this->fields() as $fid => $f) {
+            if ($fid === 'password_confirm') {
+                continue;
+            }
+
+            if ($fid === 'photo') {
+                $fake_user = new waContact();
+                $result .= '<div class="' . $class_field . ' ' . ($class_field.'-'.$f->getId()) . '"><div class="' . $class_name . '">' .
+                    _ws('Photo') . '</div><div class="' . $class_value . '">';
+                if (wa()->getUser()->get($fid)) {
+                    $result .= "\n" . '<img src="' . wa()->getUser()->getPhoto() . '">';
+                }
+                $result .= "\n" . '<img src="' . $fake_user->getPhoto() . '">';
+                $result .= "\n" . '<p><input type="file" name="' . $fid . '_file"></p>';
+                $result .= $this->html($fid, true);
+                $result .= "\n</div></div>";
+                continue;
+            }
 
             if ($f instanceof waContactHiddenField) {
                 $result .= $this->html($fid, true);
@@ -332,11 +386,12 @@ class waContactForm
             if ($f->isRequired()) {
                 $field_class .= ' '.(wa()->getEnv() == 'frontend' ? 'wa-required' : 'required');
             }
-            $result .= '<div class="'.$class_field.' '.$field_class.'"><div class="'.$class_name.'">'.
-                $f->getName().'</div><div class="'.$class_value.'">';
-            $result .= "\n".$this->html($fid, $with_errors);
+            $result .= '<div class="' . $class_field . ' ' . $field_class . '"><div class="' . $class_name . '">' .
+                $f->getName(null, true) . '</div><div class="' . $class_value . '">';
+            $result .= "\n" . $this->html($fid, $with_errors, $placeholders);
             $result .= "\n</div></div>";
         }
+        $result .= '<input type="hidden" name="_csrf" value="'.waRequest::cookie('_csrf', '').'" />';
         return $result;
     }
 
@@ -369,7 +424,7 @@ class waContactForm
         }
         $this->contact = $contact ? $contact : new waContact();
         $this->fields_validated = true;
-        if (!$this->post()) {
+        if ($this->post() === null) {
             return;
         }
         foreach($this->fields as $fid => $f) {
