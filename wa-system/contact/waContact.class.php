@@ -1031,6 +1031,9 @@ class waContact implements ArrayAccess
             if (!$has_app_access) {
                 return array();
             }
+            if ($is_admin) {
+                return $data['backend'];
+            }
             $result = array();
             $prefix = substr($name, 0, -1);
             $n = strlen($prefix);
