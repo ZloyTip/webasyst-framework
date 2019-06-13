@@ -34,6 +34,9 @@ class waEmailValidator extends waRegexValidator
     public function isValid($value)
     {
         $value = is_scalar($value) ? (string)$value : '';
+        if(!$this->options['required'] && !$value) {
+            return true;
+        }
         if (strlen($value) <= 0) {
             return false;
         }
